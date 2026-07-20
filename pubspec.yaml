@@ -1,0 +1,28 @@
+name: frame_baseline
+description: >-
+  Golden-style performance and jank regression testing for Flutter screens:
+  capture a frame-timing baseline, commit it, and fail CI on regression.
+version: 0.1.0
+repository: https://github.com/jameskrupnik/frame_baseline
+issue_tracker: https://github.com/jameskrupnik/frame_baseline/issues
+topics:
+    - performance
+    - testing
+    - jank
+    - benchmark
+
+environment:
+    sdk: '>=3.0.0 <4.0.0'
+    flutter: '>=3.10.0'
+
+dependencies:
+    flutter:
+        sdk: flutter
+
+dev_dependencies:
+    flutter_lints: ^5.0.0
+    flutter_test:
+        sdk: flutter
+
+executables:
+    frame_baseline_compare: compare
