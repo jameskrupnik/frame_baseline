@@ -114,6 +114,41 @@ void main() {
       );
     });
 
+    test('no warnings for comparable captures', () {
+      final baseline = _summary(buildMillis: List.filled(100, 5));
+      final current = _summary(buildMillis: List.filled(100, 5));
+      final result = comparator.compare(baseline: baseline, current: current);
+      expect(result.warnings, isEmpty);
+    });
+
+    test('warns when the frame budget differs', () {
+      final baseline = PerfSummary.fromDurations(
+        scenario: 'demo',
+        buildMillis: const [5, 5, 5],
+        rasterMillis: const [5, 5, 5],
+        frameBudgetMillis: 16.67, // 60fps
+      );
+      final current = PerfSummary.fromDurations(
+        scenario: 'demo',
+        buildMillis: const [5, 5, 5],
+        rasterMillis: const [5, 5, 5],
+        frameBudgetMillis: 1000 / 120, // 120fps
+      );
+      final result = comparator.compare(baseline: baseline, current: current);
+      expect(result.warnings, isNotEmpty);
+      expect(result.warnings.first, contains('frame budget differs'));
+    });
+
+    test('warns when frame counts diverge sharply', () {
+      final baseline = _summary(buildMillis: List.filled(100, 5));
+      final current = _summary(buildMillis: List.filled(10, 5));
+      final result = comparator.compare(baseline: baseline, current: current);
+      expect(
+        result.warnings.any((w) => w.contains('frame count diverges')),
+        isTrue,
+      );
+    });
+
     test('respects a stricter custom tolerance', () {
       const strict = PerfComparator(
         tolerance: PerfTolerance(

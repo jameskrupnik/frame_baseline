@@ -9,7 +9,8 @@ import 'package:frame_baseline/src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
 import 'package:frame_baseline/src/perf_report.dart'
     show ScenarioReport, renderHtmlReport, renderTerminalSummary;
-import 'package:frame_baseline/src/perf_reporter.dart' show kPerfSummaryMarker;
+import 'package:frame_baseline/src/perf_reporter.dart'
+    show extractPerfSummaries, kPerfSummaryMarker;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 // dart format on
 
@@ -50,7 +51,9 @@ void main(List<String> args) {
     exit(66);
   }
 
-  final summaries = _extractSummaries(logFile.readAsStringSync());
+  final extraction = extractPerfSummaries(logFile.readAsStringSync());
+  extraction.errors.forEach(stderr.writeln);
+  final summaries = extraction.summaries;
   if (summaries.isEmpty) {
     stderr.writeln(
       'No perf summaries found in ${logFile.path} '
@@ -120,28 +123,14 @@ String? _optionValue(List<String> args, String name) {
   return null;
 }
 
-List<PerfSummary> _extractSummaries(String log) {
-  final summaries = <PerfSummary>[];
-  for (final line in log.split('\n')) {
-    final idx = line.indexOf(kPerfSummaryMarker);
-    if (idx == -1) continue;
-    final jsonStr = line.substring(idx + kPerfSummaryMarker.length).trim();
-    try {
-      summaries.add(
-        PerfSummary.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>),
-      );
-    } catch (e) {
-      stderr.writeln('Skipping unparsable perf line: $e');
-    }
-  }
-  return summaries;
-}
-
 void _printReport(PerfComparison result) {
   final status = result.passed ? 'PASS' : 'FAIL';
   stdout.writeln('\n[$status] ${result.scenario}');
   for (final c in result.checks) {
     stdout.writeln('  ${_formatCheck(c)}');
+  }
+  for (final w in result.warnings) {
+    stdout.writeln('  !    $w');
   }
 }
 

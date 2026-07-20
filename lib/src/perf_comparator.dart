@@ -31,15 +31,30 @@ class PerfCheck {
   final bool passed;
 }
 
+/// A current run whose sampled frame count diverges from the baseline's by more
+/// than this factor (in either direction) is flagged: the scenario likely
+/// changed or the capture was truncated, making percentiles unreliable.
+const double kFrameCountDivergenceFactor = 2.0;
+
 /// Result of comparing a current [PerfSummary] against a baseline golden.
 class PerfComparison {
-  const PerfComparison({required this.scenario, required this.checks});
+  const PerfComparison({
+    required this.scenario,
+    required this.checks,
+    this.warnings = const [],
+  });
 
   /// Scenario the comparison was run for.
   final String scenario;
 
   /// Per-metric check outcomes.
   final List<PerfCheck> checks;
+
+  /// Non-fatal notes about the comparison's *validity* (distinct from
+  /// regressions), e.g. the baseline and current run used different frame
+  /// budgets, or their frame counts diverge enough that the scenario may have
+  /// changed. Empty when the two captures look comparable.
+  final List<String> warnings;
 
   /// True when every check passed.
   bool get passed => checks.every((c) => c.passed);
@@ -104,7 +119,37 @@ class PerfComparator {
       _jankCheck('missedRasterBudgetCount', baseline, current,
           (s) => s.missedRasterBudgetCount),
     ];
-    return PerfComparison(scenario: current.scenario, checks: checks);
+    return PerfComparison(
+      scenario: current.scenario,
+      checks: checks,
+      warnings: _warnings(baseline, current),
+    );
+  }
+
+  /// Flags captures that aren't meaningfully comparable, without failing the
+  /// gate — the numbers are still reported, but callers are told to distrust
+  /// them.
+  List<String> _warnings(PerfSummary baseline, PerfSummary current) {
+    final warnings = <String>[];
+    if ((baseline.frameBudgetMillis - current.frameBudgetMillis).abs() > 1e-9) {
+      warnings.add(
+        'frame budget differs (baseline ${baseline.frameBudgetMillis}ms vs '
+        'current ${current.frameBudgetMillis}ms); jank-count checks are not '
+        'directly comparable.',
+      );
+    }
+    final b = baseline.sampledFrameCount;
+    final c = current.sampledFrameCount;
+    if (b > 0 &&
+        c > 0 &&
+        (c > b * kFrameCountDivergenceFactor ||
+            b > c * kFrameCountDivergenceFactor)) {
+      warnings.add(
+        'sampled frame count diverges (baseline $b vs current $c); the scenario '
+        'may have changed or the capture was truncated.',
+      );
+    }
+    return warnings;
   }
 
   PerfCheck _ratioCheck(

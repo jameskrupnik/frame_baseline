@@ -123,6 +123,11 @@ regression on either shows up. Missed-budget frames are compared as a *rate*
 scaled to each run's frame count — a run that captures more frames than the
 baseline isn't penalized for it.
 
+When a baseline and a current run aren't meaningfully comparable — a different
+frame budget (e.g. 60 Hz vs 120 Hz capture) or a large frame-count divergence
+(the scenario likely changed) — the comparison prints a non-fatal `!` warning
+so a green/red verdict is never trusted blindly.
+
 ## What it measures
 
 `measureScreenPerformance()` records real engine `FrameTiming`s while you drive a

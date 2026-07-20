@@ -19,6 +19,11 @@ export 'src/perf_report.dart'
         regressionStatusFor,
         renderHtmlReport,
         renderTerminalSummary;
-export 'src/perf_reporter.dart' show kPerfSummaryMarker, reportPerfSummary;
+export 'src/perf_reporter.dart'
+    show
+        PerfLogExtraction,
+        extractPerfSummaries,
+        kPerfSummaryMarker,
+        reportPerfSummary;
 export 'src/perf_summary.dart' show PerfSummary;
 export 'src/perf_tolerance.dart' show PerfTolerance;
