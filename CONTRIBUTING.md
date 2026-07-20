@@ -25,8 +25,10 @@ priority:
   model) and deriving tolerances from observed run-to-run noise.
 - Multiple-sample capture and statistical comparison (median-of-N, confidence
   intervals) instead of a single run vs. a single baseline.
-- Raster-thread checks (currently only UI-thread build time gates).
 - A worked end-to-end example wired to a device farm in CI.
+
+Recently landed (no longer roadmap items): raster-thread gating, ratio-based
+janky-frame comparison, and the cross-screen HTML/terminal report.
 
 ## Guidelines
 

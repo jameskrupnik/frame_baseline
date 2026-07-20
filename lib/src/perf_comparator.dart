@@ -81,12 +81,28 @@ class PerfComparator {
         current.build.worst,
         tolerance.maxWorstBuildRegressionRatio,
       ),
-      _countCheck(
-        'missedBuildBudgetCount',
-        baseline.missedBuildBudgetCount,
-        current.missedBuildBudgetCount,
-        tolerance.maxAdditionalMissedBuildBudgetFrames,
+      _jankCheck('missedBuildBudgetCount', baseline, current,
+          (s) => s.missedBuildBudgetCount),
+      _ratioCheck(
+        'raster.p90',
+        baseline.raster.p90,
+        current.raster.p90,
+        tolerance.maxP90RasterRegressionRatio,
       ),
+      _ratioCheck(
+        'raster.p99',
+        baseline.raster.p99,
+        current.raster.p99,
+        tolerance.maxP99RasterRegressionRatio,
+      ),
+      _ratioCheck(
+        'raster.worst',
+        baseline.raster.worst,
+        current.raster.worst,
+        tolerance.maxWorstRasterRegressionRatio,
+      ),
+      _jankCheck('missedRasterBudgetCount', baseline, current,
+          (s) => s.missedRasterBudgetCount),
     ];
     return PerfComparison(scenario: current.scenario, checks: checks);
   }
@@ -112,14 +128,33 @@ class PerfComparator {
     );
   }
 
-  PerfCheck _countCheck(String name, int baseline, int current, int slack) {
-    final limit = (baseline + slack).toDouble();
+  /// Gates a janky-frame count. The limit is derived from the baseline's janky
+  /// *rate* scaled to the current run's frame count — so runs of different
+  /// lengths compare fairly — with an absolute floor of [PerfTolerance.jankyFrameSlack]
+  /// extra frames so tiny/zero-jank baselines aren't hair-trigger. Displayed in
+  /// frame-count units for readability.
+  PerfCheck _jankCheck(
+    String name,
+    PerfSummary baseline,
+    PerfSummary current,
+    int Function(PerfSummary) missedBudgetCount,
+  ) {
+    final baselineCount = missedBudgetCount(baseline);
+    final currentCount = missedBudgetCount(current);
+    final baselineRatio = baseline.sampledFrameCount == 0
+        ? 0.0
+        : baselineCount / baseline.sampledFrameCount;
+    final allowedRatio = baselineRatio + tolerance.maxAdditionalJankyFrameRatio;
+    final limit = math.max(
+      allowedRatio * current.sampledFrameCount,
+      baselineCount + tolerance.jankyFrameSlack.toDouble(),
+    );
     return PerfCheck(
       name: name,
-      baseline: baseline.toDouble(),
-      current: current.toDouble(),
+      baseline: baselineCount.toDouble(),
+      current: currentCount.toDouble(),
       limit: limit,
-      passed: current <= limit,
+      passed: currentCount <= limit,
     );
   }
 }

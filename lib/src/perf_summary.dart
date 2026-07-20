@@ -76,6 +76,10 @@ class PerfSummary {
   double get jankyBuildFrameRatio =>
       sampledFrameCount == 0 ? 0 : missedBuildBudgetCount / sampledFrameCount;
 
+  /// Fraction of sampled frames that missed the budget on the GPU thread.
+  double get jankyRasterFrameRatio =>
+      sampledFrameCount == 0 ? 0 : missedRasterBudgetCount / sampledFrameCount;
+
   Map<String, dynamic> toJson() => {
         'scenario': scenario,
         'sampledFrameCount': sampledFrameCount,

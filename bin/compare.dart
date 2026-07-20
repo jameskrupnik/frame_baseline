@@ -1,12 +1,14 @@
 // dart format off
 import 'dart:convert' show JsonEncoder, jsonDecode;
-import 'dart:io' show File, exit, stderr, stdout;
+import 'dart:io' show File, Platform, exit, stderr, stdout;
 
 // Import the pure-Dart sources directly rather than the barrel: the barrel
 // re-exports measure_screen_performance.dart, which pulls in Flutter/dart:ui and
 // would prevent this CLI from running under the standalone Dart VM.
 import 'package:frame_baseline/src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
+import 'package:frame_baseline/src/perf_report.dart'
+    show ScenarioReport, renderHtmlReport, renderTerminalSummary;
 import 'package:frame_baseline/src/perf_reporter.dart' show kPerfSummaryMarker;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 // dart format on
@@ -15,10 +17,15 @@ import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 /// then either compares each scenario against its committed golden baseline or
 /// (with `--update`) rewrites those baselines.
 ///
-/// `dart run frame_baseline:compare <log> [--baseline-dir=DIR] [--update]`
+/// ```
+/// dart run frame_baseline:compare <log> \
+///     [--baseline-dir=DIR] [--update] [--report=FILE.html]
+/// ```
 ///
 /// Exit code is non-zero if any scenario regressed or a baseline is missing,
-/// so it works directly as a CI gate.
+/// so it works directly as a CI gate. `--report` writes a color-coded HTML
+/// overview of every screen (works in `--update` mode too, for an at-a-glance
+/// view even before baselines exist).
 const _defaultBaselineDir = 'perf/baselines';
 const _encoder = JsonEncoder.withIndent('  ');
 
@@ -26,12 +33,13 @@ void main(List<String> args) {
   final update = args.contains('--update');
   final baselineDir =
       _optionValue(args, '--baseline-dir') ?? _defaultBaselineDir;
+  final reportPath = _optionValue(args, '--report');
   final positional = args.where((a) => !a.startsWith('--')).toList();
 
   if (positional.isEmpty) {
     stderr.writeln(
       'Usage: dart run frame_baseline:compare '
-      '<device-log-file> [--baseline-dir=DIR] [--update]',
+      '<device-log-file> [--baseline-dir=DIR] [--update] [--report=FILE.html]',
     );
     exit(64);
   }
@@ -53,6 +61,7 @@ void main(List<String> args) {
 
   var failed = false;
   const comparator = PerfComparator();
+  final reports = <ScenarioReport>[];
 
   for (final current in summaries) {
     final baselineFile = File('$baselineDir/${current.scenario}.perf.json');
@@ -61,6 +70,7 @@ void main(List<String> args) {
       baselineFile.parent.createSync(recursive: true);
       baselineFile.writeAsStringSync('${_encoder.convert(current.toJson())}\n');
       stdout.writeln('Updated baseline: ${baselineFile.path}');
+      reports.add(ScenarioReport(summary: current));
       continue;
     }
 
@@ -70,6 +80,7 @@ void main(List<String> args) {
         'Run with --update to create ${baselineFile.path}.',
       );
       failed = true;
+      reports.add(ScenarioReport(summary: current));
       continue;
     }
 
@@ -78,7 +89,24 @@ void main(List<String> args) {
     );
     final result = comparator.compare(baseline: baseline, current: current);
     _printReport(result);
+    reports.add(ScenarioReport(summary: current, comparison: result));
     if (!result.passed) failed = true;
+  }
+
+  final colored = stdout.supportsAnsiEscapes &&
+      (Platform.environment['NO_COLOR'] ?? '').isEmpty;
+  stdout.writeln(renderTerminalSummary(reports, colored: colored));
+
+  if (reportPath != null) {
+    final reportFile = File(reportPath);
+    reportFile.parent.createSync(recursive: true);
+    reportFile.writeAsStringSync(
+      renderHtmlReport(
+        reports,
+        generatedAtIso: DateTime.now().toIso8601String(),
+      ),
+    );
+    stdout.writeln('Wrote HTML report: ${reportFile.path}');
   }
 
   exit(failed ? 1 : 0);

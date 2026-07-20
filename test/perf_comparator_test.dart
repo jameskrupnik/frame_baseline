@@ -25,6 +25,7 @@ void main() {
       expect(s.missedBuildBudgetCount, 2); // 20 and 30 exceed 16.67
       expect(s.build.worst, 30);
       expect(s.jankyBuildFrameRatio, closeTo(2 / 6, 1e-9));
+      expect(s.jankyRasterFrameRatio, closeTo(2 / 6, 1e-9));
     });
 
     test('round-trips through JSON', () {
@@ -62,6 +63,44 @@ void main() {
         result.regressions.map((c) => c.name),
         contains('missedBuildBudgetCount'),
       );
+    });
+
+    test('catches a raster-only regression that leaves build clean', () {
+      // Build times are identical; only raster regresses.
+      final baseline = _summary(
+        buildMillis: [4, 4, 4, 4, 4],
+        rasterMillis: [4, 4, 4, 4, 8],
+      );
+      final current = _summary(
+        buildMillis: [4, 4, 4, 4, 4],
+        rasterMillis: [4, 4, 4, 4, 40],
+      );
+      final result = comparator.compare(baseline: baseline, current: current);
+      expect(result.passed, isFalse);
+      final regressed = result.regressions.map((c) => c.name);
+      expect(regressed, contains('raster.worst'));
+      expect(regressed, isNot(contains('build.worst')));
+    });
+
+    test('janky-frame gate scales with frame count, not raw difference', () {
+      // Baseline: 1 janky frame in 10 (10%). Current: 2 janky in 20 (10%) —
+      // same rate, double the raw count. A raw +count gate would flag this;
+      // the ratio-based gate must not.
+      final baseline = _summary(
+        buildMillis: [4, 4, 4, 4, 4, 4, 4, 4, 4, 40],
+      );
+      final current = _summary(
+        buildMillis: [
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 40, //
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 40
+        ],
+      );
+      final jank = comparator
+          .compare(baseline: baseline, current: current)
+          .checks
+          .firstWhere((c) => c.name == 'missedBuildBudgetCount');
+      expect(jank.current, 2);
+      expect(jank.passed, isTrue);
     });
 
     test('absolute slack ignores sub-millisecond noise on tiny baselines', () {
