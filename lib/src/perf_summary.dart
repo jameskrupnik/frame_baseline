@@ -2,6 +2,15 @@
 import 'package:frame_baseline/src/frame_stats.dart' show FrameStats;
 // dart format on
 
+/// Median of [values]; the mean of the middle two when the count is even.
+double _median(List<double> values) {
+  final sorted = [...values]..sort();
+  final mid = sorted.length ~/ 2;
+  return sorted.length.isOdd
+      ? sorted[mid]
+      : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
 /// A jank-focused performance snapshot for a single driven screen scenario.
 ///
 /// `build` covers UI-thread frame build time; `raster` covers GPU-thread raster
@@ -37,6 +46,58 @@ class PerfSummary {
           buildMillis.where((m) => m > frameBudgetMillis).length,
       missedRasterBudgetCount:
           rasterMillis.where((m) => m > frameBudgetMillis).length,
+    );
+  }
+
+  /// Reduces repeated captures of the *same* scenario to a single summary by
+  /// taking the per-metric median across [samples].
+  ///
+  /// Single-run frame timings are noisy enough that a straight run-vs-baseline
+  /// gate false-alarms on unchanged code — back-to-back runs of an identical
+  /// build routinely move p90/p99 by 20-30%. Taking the median of a few runs
+  /// discards those one-off outliers (a background process, a shader compile)
+  /// while preserving a real regression, which shifts every sample.
+  ///
+  /// Throws [ArgumentError] if [samples] is empty or mixes scenarios.
+  factory PerfSummary.medianOf(List<PerfSummary> samples) {
+    if (samples.isEmpty) {
+      throw ArgumentError.value(samples, 'samples', 'must not be empty');
+    }
+    final scenario = samples.first.scenario;
+    if (samples.any((s) => s.scenario != scenario)) {
+      throw ArgumentError.value(
+        samples,
+        'samples',
+        'all samples must be for the same scenario',
+      );
+    }
+    if (samples.length == 1) return samples.first;
+
+    double med(double Function(PerfSummary) field) =>
+        _median(samples.map(field).toList());
+
+    return PerfSummary(
+      scenario: scenario,
+      sampledFrameCount: med((s) => s.sampledFrameCount.toDouble()).round(),
+      frameBudgetMillis: med((s) => s.frameBudgetMillis),
+      build: FrameStats(
+        average: med((s) => s.build.average),
+        p50: med((s) => s.build.p50),
+        p90: med((s) => s.build.p90),
+        p99: med((s) => s.build.p99),
+        worst: med((s) => s.build.worst),
+      ),
+      raster: FrameStats(
+        average: med((s) => s.raster.average),
+        p50: med((s) => s.raster.p50),
+        p90: med((s) => s.raster.p90),
+        p99: med((s) => s.raster.p99),
+        worst: med((s) => s.raster.worst),
+      ),
+      missedBuildBudgetCount:
+          med((s) => s.missedBuildBudgetCount.toDouble()).round(),
+      missedRasterBudgetCount:
+          med((s) => s.missedRasterBudgetCount.toDouble()).round(),
     );
   }
 

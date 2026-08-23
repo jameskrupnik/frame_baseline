@@ -7,6 +7,19 @@ build/
 pubspec.lock
 doc/api/
 
+# Generated platform scaffolding for the example app. Regenerate with:
+#   cd example && flutter create --platforms=ios,android,macos .
+example/ios/
+example/android/
+example/macos/
+example/windows/
+example/linux/
+example/web/
+
+# Captured device logs are scratch input to the comparator; the committed
+# goldens under example/perf/baselines/ are what belongs in git.
+*.log
+
 # IDE
 .idea/
 .vscode/

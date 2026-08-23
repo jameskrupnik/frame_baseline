@@ -7,7 +7,11 @@ library;
 
 export 'src/frame_stats.dart' show FrameStats;
 export 'src/measure_screen_performance.dart'
-    show kDefaultFrameBudgetMillis, measureScreenPerformance;
+    show
+        InsufficientFrameDataException,
+        kDefaultFrameBudgetMillis,
+        kDefaultMinSampledFrames,
+        measureScreenPerformance;
 export 'src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
 export 'src/perf_report.dart'

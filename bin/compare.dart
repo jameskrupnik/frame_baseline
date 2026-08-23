@@ -62,12 +62,45 @@ void main(List<String> args) {
     exit(1);
   }
 
+  // A scenario measured several times in one run contributes several log
+  // lines. Collapse them to a per-metric median: single captures are noisy
+  // enough that comparing one run against one baseline false-alarms on
+  // unchanged code.
+  final grouped = <String, List<PerfSummary>>{};
+  for (final s in summaries) {
+    grouped.putIfAbsent(s.scenario, () => []).add(s);
+  }
+  final medians = [
+    for (final entry in grouped.entries) PerfSummary.medianOf(entry.value),
+  ];
+  for (final entry in grouped.entries) {
+    if (entry.value.length > 1) {
+      stdout.writeln(
+        'Using median of ${entry.value.length} samples for "${entry.key}".',
+      );
+    }
+  }
+
   var failed = false;
   const comparator = PerfComparator();
   final reports = <ScenarioReport>[];
 
-  for (final current in summaries) {
+  for (final current in medians) {
     final baselineFile = File('$baselineDir/${current.scenario}.perf.json');
+
+    // An empty capture encodes no performance information but passes every
+    // check, so recording one would bake a permanently-green gate into the
+    // repo. Refuse it at the point it would be written.
+    if (current.sampledFrameCount <= 0) {
+      stderr.writeln(
+        'Refusing to use "${current.scenario}": the run captured 0 frames. '
+        'The measurement did not happen (widget test instead of '
+        'integration_test, or an action that drove no frames).',
+      );
+      failed = true;
+      reports.add(ScenarioReport(summary: current));
+      continue;
+    }
 
     if (update) {
       baselineFile.parent.createSync(recursive: true);
@@ -128,6 +161,9 @@ void _printReport(PerfComparison result) {
   stdout.writeln('\n[$status] ${result.scenario}');
   for (final c in result.checks) {
     stdout.writeln('  ${_formatCheck(c)}');
+  }
+  for (final e in result.errors) {
+    stdout.writeln('  ERR  $e');
   }
   for (final w in result.warnings) {
     stdout.writeln('  !    $w');

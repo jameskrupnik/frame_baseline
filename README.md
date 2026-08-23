@@ -6,8 +6,9 @@ Capture a frame-timing snapshot of a screen, commit it as a baseline, and fail a
 run (locally or in CI) when a change regresses it — the same mental model as
 golden image tests, but for frames instead of pixels.
 
-> **Status: experimental (0.1.0).** The comparison layer is solid; the hard part
-> — making committed baselines robust across devices — is not fully solved. See
+> **Status: experimental (0.2.0).** Validated end to end against real engine
+> timings on real hardware — including catching an injected regression — but
+> baselines are only comparable on the device that recorded them. Read
 > [Known limitation: device variance](#known-limitation-device-variance) before
 > relying on this as a hard CI gate.
 
@@ -20,6 +21,10 @@ golden image tests, but for frames instead of pixels.
   intentionally, exactly like golden images.
 - **Tolerance-aware gate** — configurable per-metric bands so device noise
   doesn't cause false failures; non-zero exit code drops straight into CI.
+- **Median-of-N sampling** — capture a scenario several times per run and the
+  comparator gates on the median, so one stalled run doesn't fail the build.
+- **No silent passes** — a capture that recorded no frames is an error, not a
+  screen with flawless zero-millisecond frames.
 - **Cross-screen overview** — a color-coded terminal summary and an optional
   shareable HTML report showing which screens are healthy at a glance.
 - **Pure-Dart host CLI** — the comparison and reporting layer runs under the
@@ -39,6 +44,7 @@ golden image tests, but for frames instead of pixels.
 - [Public API](#public-api)
 - [Must run in PROFILE mode on a real device](#must-run-in-profile-mode-on-a-real-device)
 - [Known limitation: device variance](#known-limitation-device-variance)
+- [Failed measurements fail loudly](#failed-measurements-fail-loudly)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -76,7 +82,10 @@ dev_dependencies:
 
 ## Quick start
 
-**1. Measure inside an integration test** (run in profile mode on a device):
+**1. Measure inside an integration test.** Capture each scenario a few times —
+single captures are too noisy to gate on (see
+[device variance](#known-limitation-device-variance)); the host takes the median
+of repeated lines for the same scenario.
 
 ```dart
 import 'package:frame_baseline/frame_baseline.dart';
@@ -85,26 +94,40 @@ testWidgets('home scroll performance', (tester) async {
   await tester.pumpWidget(const MyApp());
   // ...navigate to the screen under test...
 
-  final summary = await measureScreenPerformance(
-    scenario: 'home_scroll',
-    action: () async {
-      await tester.fling(find.byType(Scrollable).first, const Offset(0, -400), 3000);
-      await tester.pumpAndSettle();
-    },
-  );
-  reportPerfSummary(summary); // prints "PERF_SUMMARY_JSON:: {...}" to the log
+  for (var sample = 0; sample < 3; sample++) {
+    final summary = await measureScreenPerformance(
+      scenario: 'home_scroll',
+      action: () async {
+        await tester.fling(find.byType(Scrollable).first, const Offset(0, -400), 3000);
+        await tester.pumpAndSettle();
+      },
+      settleDuration: const Duration(milliseconds: 500),
+    );
+    reportPerfSummary(summary); // prints "PERF_SUMMARY_JSON:: {...}" to the log
+  }
 });
 ```
 
-**2. Compare against committed baselines on the host:**
+**2. Run it in profile mode** via `flutter drive` — `flutter test` has no
+`--profile`, and the widget-test binding reports no frame timings at all:
 
 ```bash
-# Capture the device log, then:
-dart run frame_baseline:compare device.log --baseline-dir=perf/baselines
+flutter drive \
+    --driver=test_driver/integration_test.dart \
+    --target=integration_test/perf_test.dart \
+    --profile -d <device-id> | tee perf_run.log
+```
+
+**3. Compare against committed baselines on the host:**
+
+```bash
+dart run frame_baseline:compare perf_run.log --baseline-dir=perf/baselines
 
 # Create/refresh baselines (the "before"):
-dart run frame_baseline:compare device.log --baseline-dir=perf/baselines --update
+dart run frame_baseline:compare perf_run.log --baseline-dir=perf/baselines --update
 ```
+
+See [`example/`](example/) for all of this wired up and working.
 
 Exit code is non-zero on regression, so it drops straight into CI. Example
 output:
@@ -213,8 +236,10 @@ Import the barrel: `import 'package:frame_baseline/frame_baseline.dart';`
 | Symbol                       | Role                                                        |
 | ---------------------------- | ---------------------------------------------------------- |
 | `measureScreenPerformance()` | Drive a screen, capture engine frame timings.              |
+| `InsufficientFrameDataException` | Thrown when a capture recorded too few frames.        |
 | `reportPerfSummary()`        | Emit a `PerfSummary` as a machine-parsable log line.       |
 | `PerfSummary` / `FrameStats` | Pure-Dart snapshot model with JSON round-trip.             |
+| `PerfSummary.medianOf()`     | Collapse repeated samples of a scenario to their median.   |
 | `PerfComparator` / `PerfTolerance` | Baseline-vs-current comparison with tolerance bands. |
 | `gradeSummary()` / `PerfGrade` | Absolute performance grade for a screen.                |
 | `regressionStatusFor()` / `RegressionStatus` | Regression verdict vs a baseline.         |
@@ -229,18 +254,53 @@ hardware.
 ## Known limitation: device variance
 
 Committed perf baselines are only meaningful on **consistent hardware under
-consistent load**. Run them on a different CI runner or a busy machine and the
-numbers drift, so a committed golden is either flaky or so loose it catches
-nothing. Mitigations:
+consistent load**. This is the central difficulty of the whole idea, and it is
+worth being concrete about how big the effect is.
+
+Measured with [`example/`](example/) on an idle Apple Silicon Mac in profile
+mode — two back-to-back runs of an **identical** build, single capture each:
+
+| metric      | run 1   | run 2   | drift | default limit |
+| ----------- | ------- | ------- | ----- | ------------- |
+| `build.p90` | 18.95ms | 24.16ms | +27%  | +15% → **FAIL** |
+| `build.p99` | 4.22ms  | 5.24ms  | +24%  | +20% → **FAIL** |
+| `missedBuildBudgetCount` | 15 | 15 | 0% | pass |
+
+Nothing changed but the clock, and the gate went red on both screens. Two
+lessons are baked into the tooling as a result:
+
+**Take several samples.** Emit a scenario more than once per run and the
+comparator collapses them to a per-metric median, which discards one-off stalls
+(a background process, a shader compile) while preserving a regression that
+moves every sample. With median-of-3 the same identical-code comparison passes
+cleanly, and an injected regression still fails all four build checks.
+
+**Trust counts over percentiles.** Note the last row: missed-frame counts were
+*identical* across the two noisy runs. Percentile times are the noisy signal;
+janky-frame counts are the steady one. Weight your gate accordingly.
+
+Remaining mitigations, still on the user:
 
 - Pin one device (e.g. a single Firebase Test Lab model) for both baseline
-  capture and comparison.
-- Set `PerfTolerance` from *observed* run-to-run noise, not guesses.
-- Prefer gating on **missed-frame counts** and **worst-frame** outliers, which
-  are more stable than mean times.
+  capture and comparison. Numbers are not portable across hardware.
+- Set `PerfTolerance` from *observed* run-to-run noise on your device, not
+  guesses.
 
-Solving this well is the main goal of the project — see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for where this still needs work.
+
+## Failed measurements fail loudly
+
+A capture that recorded no frames has zero for every metric, which satisfies
+every tolerance band — so a measurement that never ran would otherwise report a
+permanently healthy screen. Each layer refuses it instead:
+
+- `measureScreenPerformance` throws `InsufficientFrameDataException` below
+  `minSampledFrames` (default 5), with a message naming the likely cause.
+- The CLI refuses to record or compare a zero-frame capture, and exits non-zero.
+- `gradeSummary` returns `PerfGrade.unknown`, never `good`.
+
+It also warns when measuring outside profile mode, since those numbers should
+never become a baseline.
 
 ## Contributing
 

@@ -42,6 +42,7 @@ class PerfComparison {
     required this.scenario,
     required this.checks,
     this.warnings = const [],
+    this.errors = const [],
   });
 
   /// Scenario the comparison was run for.
@@ -56,8 +57,14 @@ class PerfComparison {
   /// changed. Empty when the two captures look comparable.
   final List<String> warnings;
 
-  /// True when every check passed.
-  bool get passed => checks.every((c) => c.passed);
+  /// Fatal reasons the comparison could not be trusted at all — currently an
+  /// empty capture on either side. Unlike [warnings] these fail the gate, since
+  /// a zero-frame summary passes every metric check vacuously and would
+  /// otherwise report a regression-free green.
+  final List<String> errors;
+
+  /// True when there were no fatal [errors] and every check passed.
+  bool get passed => errors.isEmpty && checks.every((c) => c.passed);
 
   /// The checks that failed.
   List<PerfCheck> get regressions =>
@@ -73,10 +80,24 @@ class PerfComparator {
   final PerfTolerance tolerance;
 
   /// Compares [current] against [baseline], returning a per-metric verdict.
+  ///
+  /// If either side captured no frames the comparison short-circuits to a
+  /// failure: every metric of an empty summary is zero, so it would otherwise
+  /// pass all eight checks and report a clean bill of health for a measurement
+  /// that never happened.
   PerfComparison compare({
     required PerfSummary baseline,
     required PerfSummary current,
   }) {
+    final errors = _emptyCaptureErrors(baseline, current);
+    if (errors.isNotEmpty) {
+      return PerfComparison(
+        scenario: current.scenario,
+        checks: const [],
+        errors: errors,
+      );
+    }
+
     final checks = <PerfCheck>[
       _ratioCheck(
         'build.p90',
@@ -124,6 +145,27 @@ class PerfComparator {
       checks: checks,
       warnings: _warnings(baseline, current),
     );
+  }
+
+  /// Fatal validity problems: a capture with no frames in it. Kept separate
+  /// from [_warnings] because these make the verdict meaningless rather than
+  /// merely suspect.
+  List<String> _emptyCaptureErrors(PerfSummary baseline, PerfSummary current) {
+    final errors = <String>[];
+    if (baseline.sampledFrameCount <= 0) {
+      errors.add(
+        'baseline captured 0 frames, so it encodes no performance information. '
+        'Delete it and re-record with --update from a real profile-mode run.',
+      );
+    }
+    if (current.sampledFrameCount <= 0) {
+      errors.add(
+        'current run captured 0 frames, so there is nothing to compare. The '
+        'measurement likely never ran (widget test instead of integration '
+        'test, or an action that drove no frames).',
+      );
+    }
+    return errors;
   }
 
   /// Flags captures that aren't meaningfully comparable, without failing the

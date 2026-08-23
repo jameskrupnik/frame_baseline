@@ -13,7 +13,25 @@ jobs:
             - uses: subosito/flutter-action@v2
               with:
                   channel: stable
+                  # Pinned: `dart format` output changes between SDK releases, so
+                  # an unpinned toolchain turns an unrelated Flutter release into
+                  # a red build on an untouched branch.
+                  flutter-version: 3.44.0
+
             - run: flutter pub get
             - run: dart format --output=none --set-exit-if-changed .
             - run: flutter analyze
             - run: flutter test
+
+            # The example is a separate package with its own resolution, so root
+            # analysis does not cover it.
+            - name: Analyze example
+              working-directory: example
+              run: |
+                  flutter pub get
+                  flutter analyze
+
+            # Catches packaging problems (missing files, bad constraints) before
+            # a release rather than at publish time.
+            - name: Check publish readiness
+              run: flutter pub publish --dry-run

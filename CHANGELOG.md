@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.2.0
+
+First release validated end to end against real engine frame timings on real
+hardware, via the new `example/` app.
+
+Fixed — silent green on failed measurements:
+
+- A capture that recorded no frames used to produce an all-zeros `PerfSummary`,
+  which graded `good` and passed all eight tolerance checks. A misconfigured
+  setup therefore reported a permanently healthy screen. Now refused at every
+  layer:
+  - `measureScreenPerformance` throws `InsufficientFrameDataException` when
+    fewer than `minSampledFrames` (default 5) frames were captured, with a
+    message naming the likely cause.
+  - `PerfComparator` short-circuits to a failure with `PerfComparison.errors`
+    when either side captured no frames.
+  - `frame_baseline:compare` refuses to record or compare a zero-frame capture
+    and exits non-zero.
+  - `gradeSummary` returns the new `PerfGrade.unknown` instead of `good`.
+- `measureScreenPerformance` warns when run outside profile mode.
+
+Added — median-of-N sampling, for gate stability:
+
+- `PerfSummary.medianOf()` collapses repeated captures of one scenario to their
+  per-metric median, and `frame_baseline:compare` applies it automatically to
+  scenarios that appear more than once in a log.
+- Motivation, measured on an idle machine: two back-to-back runs of an identical
+  build moved `build.p90` by 27% and `build.p99` by 24% — past the default
+  tolerances, failing the gate on unchanged code. Median-of-3 passes that same
+  comparison while still failing all four build checks on an injected
+  regression.
+- `measureScreenPerformance` gains `settleDuration`, waited after the action so
+  the engine can deliver its final batch of timings.
+
+Added — `example/`:
+
+- A demo app with a smooth and a deliberately janky list, an
+  `integration_test` that captures three samples of each, committed baselines,
+  and a `flutter drive` driver for profile-mode runs.
+
 ## 0.1.0
 
 Initial release. Experimental — API may change.

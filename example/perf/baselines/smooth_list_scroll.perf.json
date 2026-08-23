@@ -1,0 +1,21 @@
+{
+  "scenario": "smooth_list_scroll",
+  "sampledFrameCount": 116,
+  "frameBudgetMillis": 16.666666666666668,
+  "build": {
+    "average": 1.5103017241379313,
+    "p50": 1.0015,
+    "p90": 3.148,
+    "p99": 6.5190499999999965,
+    "worst": 7.338
+  },
+  "raster": {
+    "average": 1.0261293103448272,
+    "p50": 1.049,
+    "p90": 1.455,
+    "p99": 1.6695499999999999,
+    "worst": 2.033
+  },
+  "missedBuildBudgetCount": 0,
+  "missedRasterBudgetCount": 0
+}

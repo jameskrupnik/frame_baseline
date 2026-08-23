@@ -16,6 +16,12 @@ enum PerfGrade {
 
   /// Janky: a p90 over budget or a meaningful share of missed frames.
   poor,
+
+  /// No frames were captured, so the screen's performance is simply unknown.
+  /// Distinct from [good]: an empty capture has zero for every metric, and
+  /// grading that as flawless is how a broken measurement masquerades as a
+  /// healthy one.
+  unknown,
 }
 
 /// Regression verdict for a screen relative to its committed baseline.
@@ -57,6 +63,7 @@ const double kNearLimitFraction = 0.9;
 /// Uses the worse of the build and raster threads for both the p90 and the
 /// janky-frame fraction, so a screen is only as good as its slowest thread.
 PerfGrade gradeSummary(PerfSummary summary) {
+  if (summary.sampledFrameCount <= 0) return PerfGrade.unknown;
   final budget = summary.frameBudgetMillis;
   final p90 = math.max(summary.build.p90, summary.raster.p90);
   final jank = math.max(
@@ -139,12 +146,14 @@ String _gradeColor(PerfGrade g) => switch (g) {
       PerfGrade.good => _ansiGreen,
       PerfGrade.ok => _ansiYellow,
       PerfGrade.poor => _ansiRed,
+      PerfGrade.unknown => _ansiRed,
     };
 
 String _gradeLabel(PerfGrade g) => switch (g) {
       PerfGrade.good => 'good',
       PerfGrade.ok => 'ok',
       PerfGrade.poor => 'poor',
+      PerfGrade.unknown => 'n/a',
     };
 
 String _statusColor(RegressionStatus s) => switch (s) {
@@ -219,6 +228,7 @@ String _gradeClass(PerfGrade g) => switch (g) {
       PerfGrade.good => 'good',
       PerfGrade.ok => 'ok',
       PerfGrade.poor => 'poor',
+      PerfGrade.unknown => 'poor',
     };
 
 String _statusClass(RegressionStatus s) => switch (s) {
