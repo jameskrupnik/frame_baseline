@@ -6,7 +6,7 @@ Capture a frame-timing snapshot of a screen, commit it as a baseline, and fail a
 run (locally or in CI) when a change regresses it — the same mental model as
 golden image tests, but for frames instead of pixels.
 
-> **Status: experimental (0.3.0).** Validated end to end against real engine
+> **Status: experimental (0.4.0).** Validated end to end against real engine
 > timings on real hardware — including catching an injected regression — but
 > baselines are only comparable on the device that recorded them. Read
 > [Known limitation: device variance](#known-limitation-device-variance) before
@@ -31,6 +31,10 @@ golden image tests, but for frames instead of pixels.
   shareable HTML report showing which screens are healthy at a glance.
 - **Pure-Dart host CLI** — the comparison and reporting layer runs under the
   standalone Dart VM, no Flutter toolchain needed on the host.
+
+**Setting this up in a real repo?** [ADOPTION.md](ADOPTION.md) is the practical
+guide: the three gates and what each catches, the local routine, copy-paste CI,
+and a decision table for when the gate goes red.
 
 ## Contents
 
@@ -80,8 +84,12 @@ machine-parsable log line, so no VM-service timeline extraction is needed.
 dev_dependencies:
     frame_baseline:
         git: https://github.com/jameskrupnik/frame_baseline.git
-    # once published: frame_baseline: ^0.1.0
+    integration_test:
+        sdk: flutter
 ```
+
+See [ADOPTION.md](ADOPTION.md) for the full setup, including the `flutter drive`
+driver you'll need to capture in profile mode.
 
 ## Quick start
 
@@ -178,6 +186,12 @@ PERF SUMMARY (3 screens)
   chat_list    poor  REGRESSED    build.p90=40.0ms raster.p90=8.0ms  jank=20.0%
   settings     poor  ok           build.p90=15.1ms raster.p90=9.0ms  jank=2.0%
 ```
+
+`--fail-on-grade=poor` turns the grade into a gate. Unlike the baseline
+comparison this needs no golden and is portable across devices — a p90 over the
+frame budget is jank wherever it was measured. It's the backstop for the case a
+baseline can't see: a screen that was *recorded while already slow* and has been
+passing ever since.
 
 Two independent signals per screen:
 
@@ -281,6 +295,7 @@ dart run frame_baseline:compare <device-log> [options]
 | `--history=FILE.jsonl` | Append this run to a history log and report cumulative drift.            |
 | `--label=SHA`          | Tag the history entry, so a drift can be traced to a commit.             |
 | `--fail-on-drift`      | Also exit non-zero on cumulative drift (requires `--history`).           |
+| `--fail-on-grade=G`    | Exit non-zero if any screen grades `G` or worse (`good`/`ok`/`poor`).   |
 
 Exit codes: `0` all screens pass · `1` a regression, missing baseline, or no
 summaries found · `64`/`66` usage / file-not-found errors.

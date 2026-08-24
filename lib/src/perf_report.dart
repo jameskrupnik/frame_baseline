@@ -59,6 +59,27 @@ const double kOkJankRatio = 0.05;
 /// [RegressionStatus.nearLimit] rather than [RegressionStatus.pass].
 const double kNearLimitFraction = 0.9;
 
+/// Orders grades from healthiest to worst, so callers can express thresholds
+/// like "fail if anything is `poor` or worse".
+///
+/// [PerfGrade.unknown] ranks worst: a screen we failed to measure is never
+/// evidence that the screen is fine.
+int gradeSeverity(PerfGrade grade) => switch (grade) {
+      PerfGrade.good => 0,
+      PerfGrade.ok => 1,
+      PerfGrade.poor => 2,
+      PerfGrade.unknown => 3,
+    };
+
+/// Parses a grade threshold name (`good`, `ok`, `poor`) for CLI use, or null if
+/// [name] isn't one.
+PerfGrade? parseGrade(String name) => switch (name.trim().toLowerCase()) {
+      'good' => PerfGrade.good,
+      'ok' => PerfGrade.ok,
+      'poor' => PerfGrade.poor,
+      _ => null,
+    };
+
 /// Grades [summary] on absolute performance against its own frame budget.
 ///
 /// Uses the worse of the build and raster threads for both the p90 and the

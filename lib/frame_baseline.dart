@@ -22,7 +22,9 @@ export 'src/perf_report.dart'
         RegressionStatus,
         ScenarioReport,
         formatDriftRatio,
+        gradeSeverity,
         gradeSummary,
+        parseGrade,
         regressionStatusFor,
         renderHtmlReport,
         renderTerminalSummary;

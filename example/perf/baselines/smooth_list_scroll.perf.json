@@ -1,20 +1,20 @@
 {
   "scenario": "smooth_list_scroll",
-  "sampledFrameCount": 116,
+  "sampledFrameCount": 115,
   "frameBudgetMillis": 16.666666666666668,
   "build": {
-    "average": 1.5103017241379313,
-    "p50": 1.0015,
-    "p90": 3.148,
-    "p99": 6.5190499999999965,
-    "worst": 7.338
+    "average": 0.6404434782608698,
+    "p50": 0.5569999999999999,
+    "p90": 1.2502,
+    "p99": 2.23504,
+    "worst": 4.892
   },
   "raster": {
-    "average": 1.0261293103448272,
-    "p50": 1.049,
-    "p90": 1.455,
-    "p99": 1.6695499999999999,
-    "worst": 2.033
+    "average": 0.45382608695652155,
+    "p50": 0.3695,
+    "p90": 0.6328000000000001,
+    "p99": 1.4446499999999947,
+    "worst": 2.934
   },
   "missedBuildBudgetCount": 0,
   "missedRasterBudgetCount": 0

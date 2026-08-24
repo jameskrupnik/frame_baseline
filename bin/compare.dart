@@ -10,7 +10,12 @@ import 'package:frame_baseline/src/perf_comparator.dart'
 import 'package:frame_baseline/src/perf_history.dart'
     show PerfHistoryEntry, encodeHistoryEntries, parseHistory;
 import 'package:frame_baseline/src/perf_report.dart'
-    show ScenarioReport, renderHtmlReport, renderTerminalSummary;
+    show
+        ScenarioReport,
+        gradeSeverity,
+        parseGrade,
+        renderHtmlReport,
+        renderTerminalSummary;
 import 'package:frame_baseline/src/perf_reporter.dart'
     show extractPerfSummaries, kPerfSummaryMarker;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
@@ -25,7 +30,8 @@ import 'package:frame_baseline/src/perf_trend.dart'
 /// ```
 /// dart run frame_baseline:compare <log> \
 ///     [--baseline-dir=DIR] [--update] [--report=FILE.html] \
-///     [--history=FILE.jsonl] [--label=SHA] [--fail-on-drift]
+///     [--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] \
+///     [--fail-on-grade=poor]
 /// ```
 ///
 /// Exit code is non-zero if any scenario regressed or a baseline is missing,
@@ -53,13 +59,24 @@ void main(List<String> args) {
     stderr.writeln(
       'Usage: dart run frame_baseline:compare '
       '<device-log-file> [--baseline-dir=DIR] [--update] [--report=FILE.html] '
-      '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift]',
+      '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
+      '[--fail-on-grade=good|ok|poor]',
     );
     exit(64);
   }
 
   if (failOnDrift && historyPath == null) {
     stderr.writeln('--fail-on-drift requires --history=FILE.jsonl.');
+    exit(64);
+  }
+
+  final gradeLimitName = _optionValue(args, '--fail-on-grade');
+  final gradeLimit = gradeLimitName == null ? null : parseGrade(gradeLimitName);
+  if (gradeLimitName != null && gradeLimit == null) {
+    stderr.writeln(
+      'Unknown --fail-on-grade value "$gradeLimitName" '
+      '(expected one of: good, ok, poor).',
+    );
     exit(64);
   }
 
@@ -205,6 +222,23 @@ void main(List<String> args) {
   }
 
   if (drifted && failOnDrift) failed = true;
+
+  // Absolute backstop, independent of any baseline: a screen whose p90 exceeds
+  // the frame budget is janky on the device that measured it, whatever the
+  // baseline happens to say. Catches the case where a baseline was recorded
+  // from an already-slow screen and every later run dutifully "passes".
+  if (gradeLimit != null) {
+    final threshold = gradeSeverity(gradeLimit);
+    for (final r in reports) {
+      if (gradeSeverity(r.grade) >= threshold) {
+        stderr.writeln(
+          '"${r.summary.scenario}" grades ${r.grade.name}, at or below the '
+          '--fail-on-grade=${gradeLimit.name} threshold.',
+        );
+        failed = true;
+      }
+    }
+  }
 
   exit(failed ? 1 : 0);
 }

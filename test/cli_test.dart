@@ -328,6 +328,71 @@ void main() {
     });
   });
 
+  group('absolute grade gate', () {
+    // A 16.67ms budget: 20ms frames are over it on any device, so this gate
+    // needs no baseline and survives being run on different hardware.
+    const janky = [20.0, 20.0, 20.0];
+    const fast = [2.0, 2.0, 2.0];
+
+    test('fails a screen that is over budget, with no baseline involved', () {
+      final result = run(
+        [_logLine(_summary(janky))],
+        args: ['--update', '--fail-on-grade=poor'],
+      );
+
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('grades poor'));
+    });
+
+    test('passes a fast screen', () {
+      final result = run(
+        [_logLine(_summary(fast))],
+        args: ['--update', '--fail-on-grade=poor'],
+      );
+
+      expect(result.exitCode, 0);
+    });
+
+    test('catches a screen whose baseline was recorded already slow', () {
+      // The blind spot this closes: baseline the screen while it is janky and
+      // every later run compares clean forever.
+      run([_logLine(_summary(janky))], args: ['--update']);
+
+      final baselineGate = run([_logLine(_summary(janky))]);
+      expect(baselineGate.exitCode, 0,
+          reason: 'the baseline comparison is satisfied by a slow screen');
+
+      final gradeGate = run(
+        [_logLine(_summary(janky))],
+        args: ['--fail-on-grade=poor'],
+      );
+      expect(gradeGate.exitCode, 1,
+          reason: 'the absolute gate still catches it');
+    });
+
+    test('a stricter threshold also rejects merely ok screens', () {
+      // ~9ms of a 16.67ms budget: over half, so "ok" rather than "good".
+      final result = run(
+        [
+          _logLine(_summary(const [9.0, 9.0, 9.0])),
+        ],
+        args: ['--update', '--fail-on-grade=ok'],
+      );
+
+      expect(result.exitCode, 1);
+    });
+
+    test('rejects an unknown threshold name', () {
+      final result = run(
+        [_logLine(_summary(fast))],
+        args: ['--fail-on-grade=blazing'],
+      );
+
+      expect(result.exitCode, 64);
+      expect(result.stderr, contains('Unknown --fail-on-grade'));
+    });
+  });
+
   test('writes an HTML report when asked', () {
     final out = '${tmp.path}/report.html';
     run(

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- **`ADOPTION.md`** — a practical guide to running this in a real repo: the
+  three gates and what each catches, setup, the local routine, copy-paste CI
+  workflows, a decision table for when the gate goes red, and how to tune
+  tolerances from observed noise rather than guesses.
+- **`--fail-on-grade=good|ok|poor`** gates on *absolute* performance, so CI can
+  fail any screen whose p90 exceeds the frame budget. Unlike the baseline
+  comparison this needs no golden and is portable across devices, and it closes
+  a real blind spot: a screen baselined while already slow passes its baseline
+  comparison indefinitely. New `gradeSeverity()` and `parseGrade()` helpers.
+- `example/tool/perf.sh` — the reference capture-and-compare script from the
+  guide, kept in the repo so it's exercised rather than aspirational.
+
 ## 0.3.0
 
 Adds performance tracking over time. A baseline gate only ever answers "did

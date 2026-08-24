@@ -1,21 +1,21 @@
 {
   "scenario": "janky_list_scroll",
-  "sampledFrameCount": 111,
+  "sampledFrameCount": 105,
   "frameBudgetMillis": 16.666666666666668,
   "build": {
-    "average": 8.32247663551402,
-    "p50": 5.877,
-    "p90": 24.509,
-    "p99": 39.44572,
-    "worst": 41.372
+    "average": 7.8327307692307695,
+    "p50": 5.581,
+    "p90": 23.759800000000002,
+    "p99": 49.0707,
+    "worst": 67.076
   },
   "raster": {
-    "average": 0.48285046728971953,
-    "p50": 0.398,
-    "p90": 0.8590000000000002,
-    "p99": 1.29646,
-    "worst": 1.712
+    "average": 0.4159326923076925,
+    "p50": 0.385,
+    "p90": 0.494,
+    "p99": 1.23111,
+    "worst": 1.286
   },
-  "missedBuildBudgetCount": 18,
+  "missedBuildBudgetCount": 14,
   "missedRasterBudgetCount": 0
 }
