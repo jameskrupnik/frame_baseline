@@ -3,6 +3,7 @@ import 'dart:math' as math show max;
 
 import 'package:frame_baseline/src/perf_comparator.dart' show PerfComparison;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
+import 'package:frame_baseline/src/perf_trend.dart' show PerfDrift;
 // dart format on
 
 /// Absolute performance grade for a single screen, judged against the frame
@@ -98,7 +99,7 @@ RegressionStatus regressionStatusFor(PerfComparison? comparison) {
 /// absolute [grade], and — when a baseline existed — the [status] and raw
 /// [comparison].
 class ScenarioReport {
-  ScenarioReport({required this.summary, this.comparison})
+  ScenarioReport({required this.summary, this.comparison, this.drift})
       : grade = gradeSummary(summary),
         status = regressionStatusFor(comparison);
 
@@ -107,6 +108,10 @@ class ScenarioReport {
 
   /// The baseline comparison, or null if there was no baseline.
   final PerfComparison? comparison;
+
+  /// Cumulative drift since the scenario's history began, or null when history
+  /// is absent or too short to judge.
+  final PerfDrift? drift;
 
   /// Absolute performance grade (baseline-independent).
   final PerfGrade grade;
@@ -204,14 +209,49 @@ String renderTerminalSummary(
       colored: colored,
     );
     final jank = math.max(s.jankyBuildFrameRatio, s.jankyRasterFrameRatio);
+    final drift = r.drift == null
+        ? ''
+        : '  drift=${_paint(
+            formatDriftRatio(r.drift!.worstP90DriftRatio),
+            r.drift!.drifted ? _ansiRed : _ansiGray,
+            colored: colored,
+          )}';
     buf.writeln(
       '  $name  $grade  $status  '
       'build.p90=${s.build.p90.toStringAsFixed(1)}ms  '
       'raster.p90=${s.raster.p90.toStringAsFixed(1)}ms  '
-      'jank=${(jank * 100).toStringAsFixed(1)}%',
+      'jank=${(jank * 100).toStringAsFixed(1)}%$drift',
+    );
+  }
+
+  final drifted = reports.where((r) => r.drift?.drifted ?? false).toList();
+  if (drifted.isNotEmpty) {
+    buf.writeln();
+    buf.writeln(
+      _paint('DRIFT since history began', _ansiBold, colored: colored),
+    );
+    for (final r in drifted) {
+      final d = r.drift!;
+      buf.writeln(
+        '  ${r.summary.scenario} is '
+        '${formatDriftRatio(d.worstP90DriftRatio)} vs the median of its first '
+        '${d.referenceSampleCount} of ${d.totalSampleCount} recorded runs.',
+      );
+    }
+    buf.writeln(
+      '  Cumulative since tracking began; may be one regression or many '
+      'individually-passing changes adding up.',
     );
   }
   return buf.toString();
+}
+
+/// Formats a drift ratio as a signed percentage, e.g. `+42%` or `-8%`.
+String formatDriftRatio(double ratio) {
+  if (ratio.isInfinite) return 'n/a';
+  final pct = ratio * 100;
+  final sign = pct >= 0 ? '+' : '';
+  return '$sign${pct.toStringAsFixed(0)}%';
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +288,17 @@ String _jankCell(double ratio) {
   return '<td class="$cls">${(ratio * 100).toStringAsFixed(1)}%</td>';
 }
 
+/// Cumulative-drift cell. Blank-styled when there is no history yet, since
+/// "unknown" and "no drift" are different claims.
+String _driftCell(PerfDrift? drift) {
+  if (drift == null) return '<td class="none">&mdash;</td>';
+  final cls = drift.drifted ? 'poor' : 'good';
+  final title = 'vs median of first ${drift.referenceSampleCount} of '
+      '${drift.totalSampleCount} recorded runs';
+  return '<td class="$cls" title="${_htmlEscape(title)}">'
+      '${formatDriftRatio(drift.worstP90DriftRatio)}</td>';
+}
+
 /// Renders a standalone, self-contained HTML report of all screens, with cells
 /// color-coded by absolute performance and a per-screen regression status.
 ///
@@ -276,6 +327,7 @@ String renderHtmlReport(
         ${_jankCell(s.jankyBuildFrameRatio)}
         ${_jankCell(s.jankyRasterFrameRatio)}
         <td class="num">${s.sampledFrameCount}</td>
+        ${_driftCell(r.drift)}
       </tr>''');
   }
 
@@ -339,6 +391,7 @@ $generated
       <th class="group">build jank</th>
       <th>raster jank</th>
       <th class="group">frames</th>
+      <th>drift</th>
     </tr>
   </thead>
   <tbody>
@@ -350,6 +403,11 @@ $rows  </tbody>
   <span class="ok">ok</span> 50&ndash;100%
   <span class="poor">poor</span> over budget.
   Times in milliseconds.
+</p>
+<p class="legend">
+  <strong>drift</strong> is the change in p90 since the scenario's history
+  began &mdash; the signal a single baseline comparison cannot give you, since
+  many individually-passing changes can still add up to a much slower screen.
 </p>
 </body>
 </html>

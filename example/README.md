@@ -43,6 +43,17 @@ dart run frame_baseline:compare perf_run.log --baseline-dir=perf/baselines --upd
 
 Step 2 exits non-zero on regression, so it drops straight into CI.
 
+Add `--history` to also record the run and track cumulative drift:
+
+```bash
+dart run frame_baseline:compare perf_run.log \
+    --baseline-dir=perf/baselines \
+    --history=perf/history.jsonl \
+    --label=$(git rev-parse --short HEAD)
+```
+
+`perf/history.jsonl` here holds real recorded runs from this demo.
+
 ## What a run looks like
 
 Recorded on an Apple Silicon Mac in profile mode:

@@ -14,11 +14,14 @@ export 'src/measure_screen_performance.dart'
         measureScreenPerformance;
 export 'src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
+export 'src/perf_history.dart'
+    show PerfHistory, PerfHistoryEntry, encodeHistoryEntries, parseHistory;
 export 'src/perf_report.dart'
     show
         PerfGrade,
         RegressionStatus,
         ScenarioReport,
+        formatDriftRatio,
         gradeSummary,
         regressionStatusFor,
         renderHtmlReport,
@@ -31,3 +34,5 @@ export 'src/perf_reporter.dart'
         reportPerfSummary;
 export 'src/perf_summary.dart' show PerfSummary;
 export 'src/perf_tolerance.dart' show PerfTolerance;
+export 'src/perf_trend.dart'
+    show PerfDrift, analyzeDrift, kDefaultReferenceWindow;

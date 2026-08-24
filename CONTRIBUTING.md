@@ -21,12 +21,12 @@ baselines are only meaningful on consistent hardware under consistent load.
 Median-of-N sampling takes the edge off (see the measured numbers in the
 README), but it does not solve it. Contributions here are the priority:
 
-- **Trend history.** Today a run is compared against one baseline, pass/fail.
-  There is no record of previous runs, so slow drift is invisible: ten changes
-  at +3% each all pass individually while the screen ends up 35% slower.
-  Appending each run to a history file and gating on the trend would close this.
 - **Confidence intervals** rather than a median plus fixed tolerance bands —
   derive the band from the observed spread of the samples themselves.
+- **Richer trend analysis.** `--history` records every run and flags cumulative
+  drift against the oldest window, but it does not yet do regression-over-time
+  (a slope), changepoint detection (*which commit* moved it), or any charting of
+  the recorded history.
 - **Guidance/tooling for pinning a device profile** (e.g. a single Firebase Test
   Lab model) and deriving tolerances from observed run-to-run noise.
 - **A worked example wired to a device farm in CI.** `example/` runs locally via
@@ -34,7 +34,8 @@ README), but it does not solve it. Contributions here are the priority:
 
 Recently landed (no longer roadmap items): raster-thread gating, ratio-based
 janky-frame comparison, the cross-screen HTML/terminal report, median-of-N
-sampling, hard failure on empty captures, and the end-to-end `example/` app.
+sampling, hard failure on empty captures, the end-to-end `example/` app, and
+history recording with cumulative drift detection.
 
 ## Guidelines
 

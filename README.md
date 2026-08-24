@@ -6,7 +6,7 @@ Capture a frame-timing snapshot of a screen, commit it as a baseline, and fail a
 run (locally or in CI) when a change regresses it — the same mental model as
 golden image tests, but for frames instead of pixels.
 
-> **Status: experimental (0.2.0).** Validated end to end against real engine
+> **Status: experimental (0.3.0).** Validated end to end against real engine
 > timings on real hardware — including catching an injected regression — but
 > baselines are only comparable on the device that recorded them. Read
 > [Known limitation: device variance](#known-limitation-device-variance) before
@@ -25,6 +25,8 @@ golden image tests, but for frames instead of pixels.
   comparator gates on the median, so one stalled run doesn't fail the build.
 - **No silent passes** — a capture that recorded no frames is an error, not a
   screen with flawless zero-millisecond frames.
+- **Drift tracking** — an append-only run history catches slow creep, which a
+  moving baseline structurally cannot: many green changes still add up.
 - **Cross-screen overview** — a color-coded terminal summary and an optional
   shareable HTML report showing which screens are healthy at a glance.
 - **Pure-Dart host CLI** — the comparison and reporting layer runs under the
@@ -38,6 +40,7 @@ golden image tests, but for frames instead of pixels.
 - [Quick start](#quick-start)
 - [What it measures](#what-it-measures)
 - [Cross-screen overview report](#cross-screen-overview-report)
+- [Tracking performance over time](#tracking-performance-over-time)
 - [Baselines are golden files](#baselines-are-golden-files)
 - [Tuning tolerances](#tuning-tolerances)
 - [CLI reference](#cli-reference)
@@ -193,6 +196,56 @@ dart run frame_baseline:compare device.log \
 
 Terminal colors auto-disable when stdout isn't a TTY or `NO_COLOR` is set.
 
+## Tracking performance over time
+
+A baseline gate answers "did *this* change make it worse?" — and that question
+alone is not enough to keep a screen fast. After every accepted change the
+baseline moves with it, so a run of individually-innocent changes each land well
+inside tolerance while the screen ends up far slower than it started:
+
+```
+4.0ms → 4.5 → 5.0 → 5.6 → 6.3 → 7.1 → 7.9ms
+  each step +12%: green ✓        total: +98%
+```
+
+Every one of those six comparisons passes. Pass `--history` and the run is
+appended to an append-only JSONL log, and each scenario is also measured against
+the median of its **oldest** recorded runs:
+
+```bash
+dart run frame_baseline:compare perf_run.log \
+    --baseline-dir=perf/baselines \
+    --history=perf/history.jsonl \
+    --label=$(git rev-parse --short HEAD)
+```
+
+```
+PERF SUMMARY (2 screens)
+  home_scroll  ok  ok  build.p90=7.9ms  raster.p90=1.2ms  jank=0.0%  drift=+98%
+
+DRIFT since history began
+  home_scroll is +98% vs the median of its first 3 runs (7 recorded).
+  Individually-passing changes have accumulated.
+```
+
+Commit `perf/history.jsonl` alongside the baselines. Appends never rewrite
+earlier lines, so the diff is always the new tail.
+
+Notes:
+
+- The anchor is the **oldest** window, not a rolling one. Anchoring to recent
+  runs is what lets creep hide, since each new run quietly becomes the normal.
+- Drift is **advisory by default** — it reports but doesn't fail the build. Add
+  `--fail-on-drift` to enforce it. It's off by default because a drift threshold
+  is a project-specific policy, and a gate that fails on a heuristic nobody
+  tuned gets ignored or disabled.
+- When a slowdown is deliberate and accepted, **truncate the history file** to
+  re-anchor — the same intentional act as re-recording a baseline.
+- Drift needs `kDefaultReferenceWindow` (3) recorded runs before it reports
+  anything; below that there's no trend to speak of.
+- `--label` is worth wiring to the commit SHA in CI (`${{ github.sha }}`), so a
+  drift can be traced to the change that introduced it.
+
 ## Baselines are golden files
 
 Commit one `perf/baselines/<scenario>.perf.json` per scenario, review changes to
@@ -225,6 +278,9 @@ dart run frame_baseline:compare <device-log> [options]
 | `--baseline-dir=DIR`   | Directory of committed baselines (default: `perf/baselines`).             |
 | `--update`             | Write/refresh baselines from the log instead of comparing.               |
 | `--report=FILE.html`   | Also write a color-coded HTML overview of all screens.                   |
+| `--history=FILE.jsonl` | Append this run to a history log and report cumulative drift.            |
+| `--label=SHA`          | Tag the history entry, so a drift can be traced to a commit.             |
+| `--fail-on-drift`      | Also exit non-zero on cumulative drift (requires `--history`).           |
 
 Exit codes: `0` all screens pass · `1` a regression, missing baseline, or no
 summaries found · `64`/`66` usage / file-not-found errors.
@@ -243,6 +299,9 @@ Import the barrel: `import 'package:frame_baseline/frame_baseline.dart';`
 | `PerfComparator` / `PerfTolerance` | Baseline-vs-current comparison with tolerance bands. |
 | `gradeSummary()` / `PerfGrade` | Absolute performance grade for a screen.                |
 | `regressionStatusFor()` / `RegressionStatus` | Regression verdict vs a baseline.         |
+| `PerfHistory` / `PerfHistoryEntry` | Append-only record of past runs (JSONL).             |
+| `parseHistory()` / `encodeHistoryEntries()` | Read and write that record.                 |
+| `analyzeDrift()` / `PerfDrift` | Cumulative drift since a scenario's history began.     |
 | `renderTerminalSummary()` / `renderHtmlReport()` | Cross-screen report rendering.        |
 
 ## Must run in PROFILE mode on a real device

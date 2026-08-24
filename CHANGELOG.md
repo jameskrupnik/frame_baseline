@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0
+
+Adds performance tracking over time. A baseline gate only ever answers "did
+*this* change make it worse?", and after each accepted change the baseline moves
+with it — so a run of individually-passing changes can leave a screen far slower
+than it started with every comparison green. Seven steps of +12% each all pass
+the default gate and total +98%.
+
+- `--history=FILE.jsonl` appends each run to an append-only history log and
+  reports how far each scenario has drifted since that history began. Appends
+  never rewrite earlier lines, so diffs stay to the new tail.
+- `--label=SHA` tags a history entry, so a drift can be traced to the commit
+  that introduced it. `--fail-on-drift` makes drift fail the build; it is
+  advisory by default, since the threshold is a project-specific policy.
+- Drift is measured against the median of a scenario's **oldest**
+  `kDefaultReferenceWindow` (3) runs. The anchor is deliberately not rolling:
+  anchoring to recent runs is what lets creep hide. Truncate the history file to
+  re-anchor after an accepted slowdown.
+- New public API: `PerfHistory`, `PerfHistoryEntry`, `parseHistory()`,
+  `encodeHistoryEntries()`, `PerfDrift`, `analyzeDrift()`,
+  `PerfTolerance.drift`, `formatDriftRatio()`.
+- Terminal and HTML reports gained a drift column, plus a summary of drifted
+  screens. A scenario with no history yet renders as `—`, not as zero drift.
+- Runs whose capture was empty are excluded from the history, so a dead run
+  can't poison the trend.
+
 ## 0.2.0
 
 First release validated end to end against real engine frame timings on real

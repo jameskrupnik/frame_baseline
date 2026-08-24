@@ -19,6 +19,25 @@ class PerfTolerance {
     this.absoluteSlackMillis = 1.0,
   });
 
+  /// Tolerance for *cumulative* drift since a scenario's history began, as used
+  /// by `analyzeDrift`.
+  ///
+  /// Looser than the per-change gate by design: it spans many accepted changes,
+  /// each of which was individually allowed to add up to 15%. The point is not
+  /// to re-litigate any single change but to catch the total — a screen that
+  /// has quietly become half again as slow as it started.
+  static const PerfTolerance drift = PerfTolerance(
+    maxP90BuildRegressionRatio: 0.50,
+    maxP99BuildRegressionRatio: 0.60,
+    maxWorstBuildRegressionRatio: 0.75,
+    maxP90RasterRegressionRatio: 0.50,
+    maxP99RasterRegressionRatio: 0.60,
+    maxWorstRasterRegressionRatio: 0.75,
+    maxAdditionalJankyFrameRatio: 0.05,
+    jankyFrameSlack: 3,
+    absoluteSlackMillis: 1.0,
+  );
+
   /// Allowed fractional increase in p90 UI-thread build time (0.15 = +15%).
   final double maxP90BuildRegressionRatio;
 
