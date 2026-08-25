@@ -16,9 +16,11 @@ example/windows/
 example/linux/
 example/web/
 
-# Captured device logs are scratch input to the comparator; the committed
-# goldens under example/perf/baselines/ are what belongs in git.
+# Captured device logs are scratch input to the comparator, and the HTML report
+# is regenerated in full on every run. The committed goldens under
+# example/perf/baselines/ and the append-only history are what belong in git.
 *.log
+**/perf/report.html
 
 # IDE
 .idea/
