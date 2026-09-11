@@ -92,7 +92,7 @@ void main() {
       final current = _summary(
         buildMillis: [
           4, 4, 4, 4, 4, 4, 4, 4, 4, 40, //
-          4, 4, 4, 4, 4, 4, 4, 4, 4, 40
+          4, 4, 4, 4, 4, 4, 4, 4, 4, 40,
         ],
       );
       final jank = comparator

@@ -52,7 +52,7 @@ void main() {
 
   test('exits 0 when a run matches its baseline', () {
     final lines = [
-      _logLine(_summary(const [4, 5, 6, 7, 8]))
+      _logLine(_summary(const [4, 5, 6, 7, 8])),
     ];
 
     expect(run(lines, args: ['--update']).exitCode, 0);
@@ -60,14 +60,17 @@ void main() {
   });
 
   test('exits 1 when a run regresses past tolerance', () {
-    run([
-      _logLine(_summary(const [4, 5, 6, 7, 8]))
-    ], args: [
-      '--update'
-    ]);
+    run(
+      [
+        _logLine(_summary(const [4, 5, 6, 7, 8])),
+      ],
+      args: [
+        '--update',
+      ],
+    );
 
     final regressed = run([
-      _logLine(_summary(const [40, 50, 60, 70, 80]))
+      _logLine(_summary(const [40, 50, 60, 70, 80])),
     ]);
     expect(regressed.exitCode, 1);
     expect(regressed.stdout, contains('FAIL'));
@@ -75,7 +78,7 @@ void main() {
 
   test('exits 1 when a scenario has no baseline at all', () {
     final result = run([
-      _logLine(_summary(const [4, 5, 6, 7, 8]))
+      _logLine(_summary(const [4, 5, 6, 7, 8])),
     ]);
     expect(result.exitCode, 1);
     expect(result.stderr, contains('No baseline'));
@@ -117,7 +120,9 @@ void main() {
         isTrue,
       );
       expect(
-          File('${tmp.path}/baselines/dead.perf.json').existsSync(), isFalse);
+        File('${tmp.path}/baselines/dead.perf.json').existsSync(),
+        isFalse,
+      );
     });
   });
 
@@ -140,13 +145,16 @@ void main() {
     });
 
     test('a single stalled sample does not fail the gate', () {
-      run([
-        _logLine(_summary(const [4, 4, 4])),
-        _logLine(_summary(const [4, 4, 4])),
-        _logLine(_summary(const [4, 4, 4])),
-      ], args: [
-        '--update'
-      ]);
+      run(
+        [
+          _logLine(_summary(const [4, 4, 4])),
+          _logLine(_summary(const [4, 4, 4])),
+          _logLine(_summary(const [4, 4, 4])),
+        ],
+        args: [
+          '--update',
+        ],
+      );
 
       // Two clean samples and one stall — the median stays clean.
       final result = run([
@@ -159,11 +167,14 @@ void main() {
     });
 
     test('a regression in every sample still fails', () {
-      run([
-        _logLine(_summary(const [4, 4, 4]))
-      ], args: [
-        '--update'
-      ]);
+      run(
+        [
+          _logLine(_summary(const [4, 4, 4])),
+        ],
+        args: [
+          '--update',
+        ],
+      );
 
       final result = run([
         _logLine(_summary(const [40, 40, 40])),
@@ -226,12 +237,15 @@ void main() {
         record(history, 4);
       }
       // Re-baseline so the per-change gate itself is clean.
-      run([
-        _logLine(_summary(const [12, 12, 12])),
-      ], args: [
-        '--update',
-        '--history=$history',
-      ]);
+      run(
+        [
+          _logLine(_summary(const [12, 12, 12])),
+        ],
+        args: [
+          '--update',
+          '--history=$history',
+        ],
+      );
 
       final lenient = run(
         [
@@ -255,7 +269,7 @@ void main() {
 
       // Each step is a ~12% regression, inside the per-change tolerance, and
       // re-baselines as it goes — exactly how creep ships unnoticed.
-      const steps = <double>[4.0, 4.5, 5.0, 5.6, 6.3, 7.1, 7.9];
+      const steps = <double>[4, 4.5, 5, 5.6, 6.3, 7.1, 7.9];
       for (final step in steps) {
         final result = run(
           [
@@ -265,15 +279,21 @@ void main() {
         );
         // Not the first few runs, which have no baseline yet.
         if (step != steps.first) {
-          expect(result.stdout, isNot(contains('FAIL')),
-              reason: 'step $step must pass the per-change gate');
+          expect(
+            result.stdout,
+            isNot(contains('FAIL')),
+            reason: 'step $step must pass the per-change gate',
+          );
         }
-        run([
-          _logLine(_summary([step, step, step])),
-        ], args: [
-          '--update',
-          '--baseline-dir=${tmp.path}/baselines',
-        ]);
+        run(
+          [
+            _logLine(_summary([step, step, step])),
+          ],
+          args: [
+            '--update',
+            '--baseline-dir=${tmp.path}/baselines',
+          ],
+        );
       }
 
       final finalRun = run(
@@ -283,8 +303,11 @@ void main() {
         args: ['--history=$history', '--fail-on-drift'],
       );
 
-      expect(finalRun.exitCode, 1,
-          reason: 'the accumulated doubling must be caught');
+      expect(
+        finalRun.exitCode,
+        1,
+        reason: 'the accumulated doubling must be caught',
+      );
       expect(finalRun.stdout, contains('DRIFT since history began'));
     });
 
@@ -295,8 +318,11 @@ void main() {
         args: ['--update', '--history=$history'],
       );
 
-      expect(File(history).existsSync(), isFalse,
-          reason: 'a dead run would poison the trend');
+      expect(
+        File(history).existsSync(),
+        isFalse,
+        reason: 'a dead run would poison the trend',
+      );
     });
 
     test('survives a corrupt history line', () {
@@ -359,15 +385,21 @@ void main() {
       run([_logLine(_summary(janky))], args: ['--update']);
 
       final baselineGate = run([_logLine(_summary(janky))]);
-      expect(baselineGate.exitCode, 0,
-          reason: 'the baseline comparison is satisfied by a slow screen');
+      expect(
+        baselineGate.exitCode,
+        0,
+        reason: 'the baseline comparison is satisfied by a slow screen',
+      );
 
       final gradeGate = run(
         [_logLine(_summary(janky))],
         args: ['--fail-on-grade=poor'],
       );
-      expect(gradeGate.exitCode, 1,
-          reason: 'the absolute gate still catches it');
+      expect(
+        gradeGate.exitCode,
+        1,
+        reason: 'the absolute gate still catches it',
+      );
     });
 
     test('a stricter threshold also rejects merely ok screens', () {
@@ -397,7 +429,7 @@ void main() {
     final out = '${tmp.path}/report.html';
     run(
       [
-        _logLine(_summary(const [4, 5, 6, 7, 8]))
+        _logLine(_summary(const [4, 5, 6, 7, 8])),
       ],
       args: ['--update', '--report=$out'],
     );

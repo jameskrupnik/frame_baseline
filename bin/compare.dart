@@ -132,7 +132,7 @@ void main(List<String> args) {
   for (final current in medians) {
     final baselineFile = File('$baselineDir/${current.scenario}.perf.json');
 
-    final PerfDrift? drift = history == null
+    final drift = history == null
         ? null
         : analyzeDrift(
             history: history.forScenario(current.scenario),

@@ -29,3 +29,6 @@ example/web/
 
 # OS
 .DS_Store
+
+# adopt.sh rollback backup (local only)
+analysis_options.yaml.pre-standard

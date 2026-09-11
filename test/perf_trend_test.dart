@@ -27,8 +27,11 @@ PerfSummary _summary(double millis, {String scenario = 'demo'}) =>
       frameBudgetMillis: 16.67,
     );
 
-PerfHistoryEntry _entry(double millis,
-        {String scenario = 'demo', int day = 1}) =>
+PerfHistoryEntry _entry(
+  double millis, {
+  String scenario = 'demo',
+  int day = 1,
+}) =>
     PerfHistoryEntry(
       recordedAt: DateTime.utc(2026, 1, day),
       summary: _summary(millis, scenario: scenario),
@@ -85,14 +88,17 @@ void main() {
     test('catches creep that every individual comparison let through', () {
       // Each step is a ~12% regression: inside the default +15% p90 gate, so
       // every one of these changes would have shipped green.
-      final steps = <double>[4.0, 4.5, 5.0, 5.6, 6.3, 7.1, 7.9];
+      final steps = <double>[4, 4.5, 5, 5.6, 6.3, 7.1, 7.9];
       for (var i = 1; i < steps.length; i++) {
         final stepGate = const PerfComparator().compare(
           baseline: _summary(steps[i - 1]),
           current: _summary(steps[i]),
         );
-        expect(stepGate.passed, isTrue,
-            reason: 'step ${steps[i - 1]} -> ${steps[i]} must pass the gate');
+        expect(
+          stepGate.passed,
+          isTrue,
+          reason: 'step ${steps[i - 1]} -> ${steps[i]} must pass the gate',
+        );
       }
 
       // Yet the total is a doubling, and drift sees it.
@@ -150,7 +156,7 @@ void main() {
       expect(parsed.entries, hasLength(3));
       expect(parsed.entries.first.label, 'sha1');
       expect(parsed.entries.first.summary.build.p90, 4);
-      expect(parsed.entries.first.recordedAt, DateTime.utc(2026, 1, 1));
+      expect(parsed.entries.first.recordedAt, DateTime.utc(2026));
     });
 
     test('every line is terminated so appends stay well-formed', () {

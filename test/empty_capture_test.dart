@@ -48,8 +48,11 @@ void main() {
         caught = e;
       }
 
-      expect(caught, isA<InsufficientFrameDataException>(),
-          reason: 'a zero-frame capture must throw, not return all zeros');
+      expect(
+        caught,
+        isA<InsufficientFrameDataException>(),
+        reason: 'a zero-frame capture must throw, not return all zeros',
+      );
     });
 
     testWidgets('the exception explains the likely cause', (tester) async {
@@ -79,8 +82,11 @@ void main() {
         current: _summary(const []),
       );
 
-      expect(result.passed, isFalse,
-          reason: 'an empty current run must never report a clean pass');
+      expect(
+        result.passed,
+        isFalse,
+        reason: 'an empty current run must never report a clean pass',
+      );
       expect(result.errors, isNotEmpty);
       expect(result.errors.join(), contains('current run captured 0 frames'));
     });

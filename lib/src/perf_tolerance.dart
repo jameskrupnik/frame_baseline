@@ -35,7 +35,6 @@ class PerfTolerance {
     maxWorstRasterRegressionRatio: 0.75,
     maxAdditionalJankyFrameRatio: 0.05,
     jankyFrameSlack: 3,
-    absoluteSlackMillis: 1.0,
   );
 
   /// Allowed fractional increase in p90 UI-thread build time (0.15 = +15%).

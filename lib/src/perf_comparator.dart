@@ -34,7 +34,7 @@ class PerfCheck {
 /// A current run whose sampled frame count diverges from the baseline's by more
 /// than this factor (in either direction) is flagged: the scenario likely
 /// changed or the capture was truncated, making percentiles unreliable.
-const double kFrameCountDivergenceFactor = 2.0;
+const double kFrameCountDivergenceFactor = 2;
 
 /// Result of comparing a current [PerfSummary] against a baseline golden.
 class PerfComparison {
@@ -117,8 +117,12 @@ class PerfComparator {
         current.build.worst,
         tolerance.maxWorstBuildRegressionRatio,
       ),
-      _jankCheck('missedBuildBudgetCount', baseline, current,
-          (s) => s.missedBuildBudgetCount),
+      _jankCheck(
+        'missedBuildBudgetCount',
+        baseline,
+        current,
+        (s) => s.missedBuildBudgetCount,
+      ),
       _ratioCheck(
         'raster.p90',
         baseline.raster.p90,
@@ -137,8 +141,12 @@ class PerfComparator {
         current.raster.worst,
         tolerance.maxWorstRasterRegressionRatio,
       ),
-      _jankCheck('missedRasterBudgetCount', baseline, current,
-          (s) => s.missedRasterBudgetCount),
+      _jankCheck(
+        'missedRasterBudgetCount',
+        baseline,
+        current,
+        (s) => s.missedRasterBudgetCount,
+      ),
     ];
     return PerfComparison(
       scenario: current.scenario,

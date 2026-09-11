@@ -47,7 +47,7 @@ const double kGoodP90BudgetFraction = 0.5;
 
 /// Above [kGoodP90BudgetFraction] but at/under this fraction of budget grades
 /// `ok`; a p90 over this is `poor`.
-const double kOkP90BudgetFraction = 1.0;
+const double kOkP90BudgetFraction = 1;
 
 /// Max janky-frame fraction still allowed for a `good` grade (1%).
 const double kGoodJankRatio = 0.01;
@@ -206,9 +206,8 @@ String renderTerminalSummary(
   required bool colored,
 }) {
   if (reports.isEmpty) return '';
-  final scenarioWidth = reports
-      .map((r) => r.summary.scenario.length)
-      .fold(8, (a, b) => math.max(a, b));
+  final scenarioWidth =
+      reports.map((r) => r.summary.scenario.length).fold(8, math.max);
 
   final buf = StringBuffer();
   final title = 'PERF SUMMARY (${reports.length} '

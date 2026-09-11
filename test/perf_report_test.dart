@@ -88,7 +88,7 @@ void main() {
     test('omits ANSI codes when colored is false', () {
       final out = renderTerminalSummary(
         [
-          ScenarioReport(summary: _summary(buildMillis: [4, 5, 6]))
+          ScenarioReport(summary: _summary(buildMillis: [4, 5, 6])),
         ],
         colored: false,
       );
@@ -100,7 +100,7 @@ void main() {
     test('includes ANSI codes when colored is true', () {
       final out = renderTerminalSummary(
         [
-          ScenarioReport(summary: _summary(buildMillis: [4, 4, 40]))
+          ScenarioReport(summary: _summary(buildMillis: [4, 4, 40])),
         ],
         colored: true,
       );

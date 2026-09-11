@@ -35,8 +35,10 @@ void main() {
     });
 
     test('ignores any prefix before the marker (e.g. a log timestamp)', () {
-      final log = _line(_summary('home'),
-          prefix: '2026-07-19 12:00:00.123 I/flutter: ');
+      final log = _line(
+        _summary('home'),
+        prefix: '2026-07-19 12:00:00.123 I/flutter: ',
+      );
       final result = extractPerfSummaries(log);
       expect(result.summaries.single.scenario, 'home');
     });
