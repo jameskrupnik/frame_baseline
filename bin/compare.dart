@@ -19,8 +19,7 @@ import 'package:frame_baseline/src/perf_report.dart'
 import 'package:frame_baseline/src/perf_reporter.dart'
     show extractPerfSummaries, kPerfSummaryMarker;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
-import 'package:frame_baseline/src/perf_trend.dart'
-    show PerfDrift, analyzeDrift;
+import 'package:frame_baseline/src/perf_trend.dart' show analyzeDrift;
 // dart format on
 
 /// Host-side gate: extracts on-device [PerfSummary] JSON from a device/CI log,
