@@ -1,5 +1,8 @@
 // dart format off
-import 'dart:convert' show jsonDecode, jsonEncode;
+import 'dart:convert' show jsonEncode;
+
+import 'package:frame_baseline/src/json_fields.dart'
+    show decodeJsonObject, readField;
 
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 // dart format on
@@ -10,6 +13,7 @@ import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 /// never rewrites earlier data and git diffs stay to the appended tail rather
 /// than churning the whole file.
 class PerfHistoryEntry {
+  /// Creates an entry for [summary], recorded at [recordedAt].
   const PerfHistoryEntry({
     required this.recordedAt,
     required this.summary,
@@ -17,11 +21,15 @@ class PerfHistoryEntry {
   });
 
   /// Parses an entry from its [toJson] representation.
+  ///
+  /// Throws a [FormatException] if a field is missing or has the wrong type.
   factory PerfHistoryEntry.fromJson(Map<String, dynamic> json) =>
       PerfHistoryEntry(
-        recordedAt: DateTime.parse(json['recordedAt'] as String),
-        summary: PerfSummary.fromJson(json['summary'] as Map<String, dynamic>),
-        label: json['label'] as String?,
+        recordedAt: DateTime.parse(readField<String>(json, 'recordedAt')),
+        summary: PerfSummary.fromJson(
+          readField<Map<String, dynamic>>(json, 'summary'),
+        ),
+        label: readField<String?>(json, 'label'),
       );
 
   /// When the run was recorded.
@@ -34,9 +42,13 @@ class PerfHistoryEntry {
   /// traced back to the change that introduced it.
   final String? label;
 
-  /// Convenience: the scenario this entry measures.
+  /// The scenario this entry measures, taken from [summary].
   String get scenario => summary.scenario;
 
+  /// Converts this entry to a JSON-encodable map, the inverse of
+  /// [PerfHistoryEntry.fromJson].
+  ///
+  /// [label] is omitted when null, so untagged lines stay short.
   Map<String, dynamic> toJson() => {
         'recordedAt': recordedAt.toIso8601String(),
         if (label != null) 'label': label,
@@ -47,6 +59,9 @@ class PerfHistoryEntry {
 /// Result of reading a history log: the entries that parsed, plus messages for
 /// any lines that did not.
 class PerfHistory {
+  /// Creates a history from already-parsed [entries] and [errors].
+  ///
+  /// Use [parseHistory] to read one from a JSONL file.
   const PerfHistory({required this.entries, required this.errors});
 
   /// Successfully parsed entries, in file order (oldest first).
@@ -55,7 +70,7 @@ class PerfHistory {
   /// Human-readable messages for unparsable lines.
   final List<String> errors;
 
-  /// Entries for [scenario], oldest first.
+  /// Returns the entries for [scenario], oldest first.
   List<PerfHistoryEntry> forScenario(String scenario) =>
       entries.where((e) => e.scenario == scenario).toList(growable: false);
 
@@ -84,10 +99,8 @@ PerfHistory parseHistory(String contents) {
     final line = rawLine.trim();
     if (line.isEmpty) continue;
     try {
-      entries.add(
-        PerfHistoryEntry.fromJson(jsonDecode(line) as Map<String, dynamic>),
-      );
-    } catch (e) {
+      entries.add(PerfHistoryEntry.fromJson(decodeJsonObject(line)));
+    } on FormatException catch (e) {
       errors.add('Skipping unparsable history line $lineNumber: $e');
     }
   }

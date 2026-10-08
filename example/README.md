@@ -64,7 +64,7 @@ PERF SUMMARY (2 screens)
   janky_list_scroll   poor  ok           build.p90=22.9ms  raster.p90=0.8ms  jank=12.6%
 ```
 
-`good`/`poor` is absolute performance vs the 60fps budget; `ok`/`REGRESSED` is
+`good`/`poor` is absolute performance vs the frame budget; `ok`/`REGRESSED` is
 the verdict against the committed baseline. The two are independent — the janky
 screen is legitimately slow *and* legitimately unchanged.
 

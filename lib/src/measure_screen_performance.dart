@@ -1,5 +1,5 @@
 // dart format off
-import 'dart:ui' show FrameTiming;
+import 'dart:ui' show FramePhase, FrameTiming;
 
 import 'package:flutter/foundation.dart'
     show debugPrint, kDebugMode, kProfileMode;
@@ -7,7 +7,11 @@ import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 // dart format on
 
-/// Nominal 60fps frame budget in milliseconds. Override for 90/120Hz devices.
+/// The nominal 60fps frame budget, in milliseconds.
+///
+/// [measureScreenPerformance] uses it only when the display does not report a
+/// refresh rate; otherwise the budget follows the display, so a 120Hz phone is
+/// judged against 8.33ms rather than 16.67ms.
 const double kDefaultFrameBudgetMillis = 1000 / 60;
 
 /// Fewest frames a capture may contain and still be treated as meaningful.
@@ -24,19 +28,21 @@ const int kDefaultMinSampledFrames = 5;
 /// capture grades as flawless and passes every comparison check, so swallowing
 /// it would turn a broken setup into a permanently green perf gate.
 class InsufficientFrameDataException implements Exception {
+  /// Creates an exception for [scenario], which captured [sampledFrameCount]
+  /// frames against a required [minSampledFrames].
   const InsufficientFrameDataException({
     required this.scenario,
     required this.sampledFrameCount,
     required this.minSampledFrames,
   });
 
-  /// Scenario that was being measured.
+  /// The scenario that was being measured.
   final String scenario;
 
-  /// How many frames were actually captured.
+  /// The number of frames actually captured.
   final int sampledFrameCount;
 
-  /// How many were required.
+  /// The number of frames that were required.
   final int minSampledFrames;
 
   @override
@@ -75,13 +81,33 @@ class InsufficientFrameDataException implements Exception {
 /// detaching the callback, giving the engine time to deliver its final batch of
 /// timings. Only use it where real time advances (an `integration_test`); under
 /// the widget-test binding a delay stalls until the fake clock is pumped.
+///
+/// [frameBudgetMillis] defaults to one refresh interval of the display the app
+/// is drawing on (8.33ms at 120Hz), falling back to
+/// [kDefaultFrameBudgetMillis] when the display reports no refresh rate. Pass
+/// it to judge every device against the same budget. Throws [ArgumentError]
+/// if it is not a positive, finite number.
+///
+/// Frames the engine finished rasterizing before [action] started are
+/// dropped: the engine delivers timings in batches, so the first batch can
+/// carry frames from before the measurement began.
 Future<PerfSummary> measureScreenPerformance({
   required String scenario,
   required Future<void> Function() action,
-  double frameBudgetMillis = kDefaultFrameBudgetMillis,
+  double? frameBudgetMillis,
   int minSampledFrames = kDefaultMinSampledFrames,
   Duration settleDuration = Duration.zero,
 }) async {
+  if (frameBudgetMillis != null &&
+      !(frameBudgetMillis.isFinite && frameBudgetMillis > 0)) {
+    throw ArgumentError.value(
+      frameBudgetMillis,
+      'frameBudgetMillis',
+      'must be a positive, finite number of milliseconds',
+    );
+  }
+  final budget = frameBudgetMillis ?? _displayFrameBudgetMillis();
+
   if (!kProfileMode) {
     debugPrint(
       'frame_baseline: WARNING - measuring "$scenario" in '
@@ -91,8 +117,19 @@ Future<PerfSummary> measureScreenPerformance({
     );
   }
 
+  // Outside release mode the framework registers a timings callback of its
+  // own, so the engine is always collecting and its next batch can hold frames
+  // from up to ~100ms before this point. rasterFinishWallTime is stamped from
+  // the system clock, so it can be compared with DateTime.
+  final startedAt = DateTime.now().microsecondsSinceEpoch;
   final timings = <FrameTiming>[];
-  void collector(List<FrameTiming> batch) => timings.addAll(batch);
+  void collector(List<FrameTiming> batch) => timings.addAll(
+        batch.where(
+          (t) =>
+              t.timestampInMicroseconds(FramePhase.rasterFinishWallTime) >=
+              startedAt,
+        ),
+      );
 
   SchedulerBinding.instance.addTimingsCallback(collector);
   try {
@@ -118,6 +155,15 @@ Future<PerfSummary> measureScreenPerformance({
     scenario: scenario,
     buildMillis: [for (final t in timings) toMillis(t.buildDuration)],
     rasterMillis: [for (final t in timings) toMillis(t.rasterDuration)],
-    frameBudgetMillis: frameBudgetMillis,
+    frameBudgetMillis: budget,
   );
+}
+
+/// One refresh interval of the display the app draws on, in milliseconds, or
+/// [kDefaultFrameBudgetMillis] when the app has no implicit view (a
+/// multi-view embedding) or its display reports no rate.
+double _displayFrameBudgetMillis() {
+  final view = SchedulerBinding.instance.platformDispatcher.implicitView;
+  final hz = view?.display.refreshRate ?? 0;
+  return hz.isFinite && hz > 0 ? 1000 / hz : kDefaultFrameBudgetMillis;
 }

@@ -11,7 +11,7 @@ import 'dart:io' show Directory, File, FileMode, Process, ProcessResult;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frame_baseline/frame_baseline.dart'
-    show PerfSummary, kPerfSummaryMarker;
+    show PerfSummary, kPerfSummaryMarker, parseHistory;
 // dart format on
 
 /// Builds a device-log line, including a realistic log prefix to prove the
@@ -23,12 +23,13 @@ PerfSummary _summary(
   List<double> millis, {
   String scenario = 'demo',
   List<double>? raster,
+  double budget = 16.67,
 }) =>
     PerfSummary.fromDurations(
       scenario: scenario,
       buildMillis: millis,
       rasterMillis: raster ?? millis,
-      frameBudgetMillis: 16.67,
+      frameBudgetMillis: budget,
     );
 
 void main() {
@@ -325,6 +326,31 @@ void main() {
       );
     });
 
+    test('keeps the run when the history file lacks a final newline', () {
+      // A hand edit or a write cut short leaves no newline at the end; the
+      // next run's line must not be glued onto it and lost with it.
+      final history = '${tmp.path}/history.jsonl';
+      record(history, 4);
+      final file = File(history);
+      file.writeAsStringSync(file.readAsStringSync().trimRight());
+
+      record(history, 5, label: 'next');
+
+      final parsed = parseHistory(file.readAsStringSync());
+      expect(parsed.errors, isEmpty);
+      expect(parsed.entries, hasLength(2));
+      expect(parsed.entries.last.label, 'next');
+    });
+
+    test('records timestamps in UTC so machines in other zones agree', () {
+      final history = '${tmp.path}/history.jsonl';
+      record(history, 4);
+
+      final entry =
+          parseHistory(File(history).readAsStringSync()).entries.single;
+      expect(entry.recordedAt.isUtc, isTrue);
+    });
+
     test('survives a corrupt history line', () {
       final history = '${tmp.path}/history.jsonl';
       record(history, 4);
@@ -446,5 +472,122 @@ void main() {
       Process.runSync('dart', ['run', 'bin/compare.dart', 'nope.log']).exitCode,
       66,
     );
+  });
+
+  group('argument validation', () {
+    // Each of these used to be ignored, which silently switched a gate off
+    // while the build stayed green.
+    final lines = [
+      _logLine(_summary(const [4, 5, 6, 7, 8])),
+    ];
+
+    test('rejects an unknown or misspelt option', () {
+      final result = run(lines, args: ['--updtae']);
+
+      expect(result.exitCode, 64);
+      expect(result.stderr, contains('Unknown option "--updtae"'));
+    });
+
+    test('rejects a value written after a space instead of =', () {
+      final result = run(lines, args: ['--fail-on-grade', 'poor']);
+
+      expect(result.exitCode, 64);
+      expect(result.stderr, contains('--fail-on-grade needs a value'));
+    });
+
+    test('rejects a value on an on/off flag', () {
+      final result = run(lines, args: ['--update=true']);
+
+      expect(result.exitCode, 64);
+      expect(result.stderr, contains('--update does not take a value'));
+    });
+
+    test('--help prints usage and exits 0', () {
+      final result = Process.runSync('dart', [
+        'run',
+        'bin/compare.dart',
+        '--help',
+      ]);
+
+      expect(result.exitCode, 0);
+      expect(result.stdout, contains('Usage:'));
+    });
+  });
+
+  test('refuses a scenario name that would escape the baseline directory', () {
+    final result = run(
+      [
+        _logLine(_summary(const [4, 5, 6, 7, 8], scenario: '../escaped')),
+      ],
+      args: ['--update'],
+    );
+
+    expect(result.exitCode, 1);
+    expect(result.stderr, contains('Refusing scenario "../escaped"'));
+    expect(File('${tmp.path}/escaped.perf.json').existsSync(), isFalse);
+  });
+
+  test('refuses scenario names that share a baseline file on macOS/Windows',
+      () {
+    // Case-insensitive file systems map both names to one file, so one
+    // scenario's baseline would silently overwrite the other's.
+    final result = run(
+      [
+        _logLine(_summary(const [4, 5, 6, 7, 8], scenario: 'Home')),
+        _logLine(_summary(const [9, 9, 9, 9, 9], scenario: 'home')),
+      ],
+      args: ['--update'],
+    );
+
+    expect(result.exitCode, 1);
+    expect(result.stderr, contains('"Home"'));
+    expect(result.stderr, contains('"home"'));
+  });
+
+  test('fails a scenario whose samples were captured at different budgets', () {
+    // A log from a 60 Hz and a 120 Hz device has no meaningful median.
+    final lines = [
+      _logLine(_summary(const [4, 5, 6, 7, 8])),
+      _logLine(_summary(const [4, 5, 6, 7, 8], budget: 1000 / 120)),
+      _logLine(_summary(const [4, 5, 6, 7, 8], scenario: 'other')),
+    ];
+
+    final result = run(lines, args: ['--update']);
+
+    expect(result.exitCode, 1);
+    expect(result.stderr, contains('different frame budgets'));
+    expect(File('${tmp.path}/baselines/demo.perf.json').existsSync(), isFalse);
+    expect(
+      File('${tmp.path}/baselines/other.perf.json').existsSync(),
+      isTrue,
+      reason: 'one bad scenario must not stop the others',
+    );
+  });
+
+  test('an unchanged run is not reported near its limit', () {
+    final lines = [
+      _logLine(
+        _summary([for (var i = 0; i < 40; i++) i < 30 ? 20 : 4]),
+      ),
+    ];
+    run(lines, args: ['--update']);
+
+    final result = run(lines);
+    expect(result.exitCode, 0);
+    expect(result.stdout, isNot(contains('near-limit')));
+  });
+
+  test('fails with the path, not a stack trace, on a corrupt baseline', () {
+    final lines = [
+      _logLine(_summary(const [4, 5, 6, 7, 8])),
+    ];
+    run(lines, args: ['--update']);
+    File('${tmp.path}/baselines/demo.perf.json').writeAsStringSync('{oops');
+
+    final result = run(lines);
+
+    expect(result.exitCode, 1);
+    expect(result.stderr, contains('Unreadable baseline'));
+    expect(result.stderr, contains('demo.perf.json'));
   });
 }

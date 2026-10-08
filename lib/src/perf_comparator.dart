@@ -1,12 +1,14 @@
 // dart format off
 import 'dart:math' as math show max;
 
-import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
+import 'package:frame_baseline/src/perf_summary.dart'
+    show PerfSummary, sameFrameBudget;
 import 'package:frame_baseline/src/perf_tolerance.dart' show PerfTolerance;
 // dart format on
 
 /// Outcome of a single metric check within a comparison.
 class PerfCheck {
+  /// Creates the outcome of checking one metric.
   const PerfCheck({
     required this.name,
     required this.baseline,
@@ -38,6 +40,7 @@ const double kFrameCountDivergenceFactor = 2;
 
 /// Result of comparing a current [PerfSummary] against a baseline golden.
 class PerfComparison {
+  /// Creates a comparison result for [scenario].
   const PerfComparison({
     required this.scenario,
     required this.checks,
@@ -57,13 +60,15 @@ class PerfComparison {
   /// changed. Empty when the two captures look comparable.
   final List<String> warnings;
 
-  /// Fatal reasons the comparison could not be trusted at all — currently an
-  /// empty capture on either side. Unlike [warnings] these fail the gate, since
+  /// Fatal reasons the comparison could not be trusted at all.
+  ///
+  /// Currently an empty capture on either side. Unlike [warnings] these fail
+  /// the gate, since
   /// a zero-frame summary passes every metric check vacuously and would
   /// otherwise report a regression-free green.
   final List<String> errors;
 
-  /// True when there were no fatal [errors] and every check passed.
+  /// Whether there were no fatal [errors] and every check passed.
   bool get passed => errors.isEmpty && checks.every((c) => c.passed);
 
   /// The checks that failed.
@@ -74,6 +79,8 @@ class PerfComparison {
 /// Compares a current performance snapshot against a committed baseline,
 /// applying [PerfTolerance] so device variance doesn't cause false failures.
 class PerfComparator {
+  /// Creates a comparator that applies [tolerance], which defaults to the
+  /// per-change gate's band.
   const PerfComparator({this.tolerance = const PerfTolerance()});
 
   /// Tolerance band applied to each metric.
@@ -181,7 +188,10 @@ class PerfComparator {
   /// them.
   List<String> _warnings(PerfSummary baseline, PerfSummary current) {
     final warnings = <String>[];
-    if ((baseline.frameBudgetMillis - current.frameBudgetMillis).abs() > 1e-9) {
+    if (!sameFrameBudget(
+      baseline.frameBudgetMillis,
+      current.frameBudgetMillis,
+    )) {
       warnings.add(
         'frame budget differs (baseline ${baseline.frameBudgetMillis}ms vs '
         'current ${current.frameBudgetMillis}ms); jank-count checks are not '

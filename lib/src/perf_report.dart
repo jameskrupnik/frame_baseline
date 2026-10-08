@@ -1,13 +1,18 @@
 // dart format off
 import 'dart:math' as math show max;
 
-import 'package:frame_baseline/src/perf_comparator.dart' show PerfComparison;
+import 'package:frame_baseline/src/perf_comparator.dart'
+    show PerfCheck, PerfComparison;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 import 'package:frame_baseline/src/perf_trend.dart' show PerfDrift;
 // dart format on
 
-/// Absolute performance grade for a single screen, judged against the frame
-/// budget — independent of any baseline. Answers "is this screen fast?".
+/// An absolute performance grade for a single screen, judged against its
+/// frame budget.
+///
+/// Independent of any baseline, it answers "is this screen fast?".
+///
+/// Declared from healthiest to worst, so [severity] (and [index]) order them.
 enum PerfGrade {
   /// Comfortably smooth: p90 well under budget and almost no janky frames.
   good,
@@ -19,19 +24,43 @@ enum PerfGrade {
   poor,
 
   /// No frames were captured, so the screen's performance is simply unknown.
+  ///
   /// Distinct from [good]: an empty capture has zero for every metric, and
   /// grading that as flawless is how a broken measurement masquerades as a
   /// healthy one.
-  unknown,
+  unknown;
+
+  /// Parses a grade threshold name (`good`, `ok`, `poor`), ignoring case and
+  /// surrounding whitespace, or returns null if [name] isn't one.
+  ///
+  /// [unknown] is deliberately not parseable: it describes a failed
+  /// measurement, not a threshold anyone would gate on.
+  static PerfGrade? tryParse(String name) =>
+      switch (name.trim().toLowerCase()) {
+        'good' => good,
+        'ok' => ok,
+        'poor' => poor,
+        _ => null,
+      };
+
+  /// Rank from healthiest (0) to worst, so callers can express thresholds
+  /// like "fail if anything is [poor] or worse".
+  ///
+  /// [unknown] ranks worst: a screen we failed to measure is never evidence
+  /// that the screen is fine.
+  int get severity => index;
 }
 
-/// Regression verdict for a screen relative to its committed baseline.
-/// Answers "did this change make it worse?".
+/// A regression verdict for a screen relative to its committed baseline.
+///
+/// Answers "did this change make it worse?"; see [PerfGrade] for the absolute
+/// question.
 enum RegressionStatus {
   /// Comfortably within tolerance.
   pass,
 
-  /// Passing, but a metric is within [kNearLimitFraction] of its limit.
+  /// Passing, but some metric has used 90% or more of the headroom its
+  /// tolerance allows above the baseline.
   nearLimit,
 
   /// At least one metric regressed past tolerance.
@@ -55,30 +84,10 @@ const double kGoodJankRatio = 0.01;
 /// Max janky-frame fraction still allowed for an `ok` grade (5%).
 const double kOkJankRatio = 0.05;
 
-/// A passing metric this close to its limit (as a fraction) is flagged
+/// A passing metric that has used this fraction of its headroom — the gap
+/// between its baseline and its limit — is flagged
 /// [RegressionStatus.nearLimit] rather than [RegressionStatus.pass].
 const double kNearLimitFraction = 0.9;
-
-/// Orders grades from healthiest to worst, so callers can express thresholds
-/// like "fail if anything is `poor` or worse".
-///
-/// [PerfGrade.unknown] ranks worst: a screen we failed to measure is never
-/// evidence that the screen is fine.
-int gradeSeverity(PerfGrade grade) => switch (grade) {
-      PerfGrade.good => 0,
-      PerfGrade.ok => 1,
-      PerfGrade.poor => 2,
-      PerfGrade.unknown => 3,
-    };
-
-/// Parses a grade threshold name (`good`, `ok`, `poor`) for CLI use, or null if
-/// [name] isn't one.
-PerfGrade? parseGrade(String name) => switch (name.trim().toLowerCase()) {
-      'good' => PerfGrade.good,
-      'ok' => PerfGrade.ok,
-      'poor' => PerfGrade.poor,
-      _ => null,
-    };
 
 /// Grades [summary] on absolute performance against its own frame budget.
 ///
@@ -108,18 +117,30 @@ PerfGrade gradeSummary(PerfSummary summary) {
 RegressionStatus regressionStatusFor(PerfComparison? comparison) {
   if (comparison == null) return RegressionStatus.noBaseline;
   if (!comparison.passed) return RegressionStatus.regressed;
-  for (final check in comparison.checks) {
-    if (check.limit > 0 && check.current >= check.limit * kNearLimitFraction) {
-      return RegressionStatus.nearLimit;
-    }
-  }
-  return RegressionStatus.pass;
+  return comparison.checks.any(_isNearLimit)
+      ? RegressionStatus.nearLimit
+      : RegressionStatus.pass;
+}
+
+/// Whether [check] has used [kNearLimitFraction] of the headroom between its
+/// baseline and its limit.
+///
+/// Measured from the baseline, not from zero: a limit is the baseline plus a
+/// tolerance, so with a tolerance under ~11% an unchanged metric already sits
+/// past 90% of its limit. A metric no worse than its baseline is never near,
+/// which also covers a zero-headroom limit.
+bool _isNearLimit(PerfCheck check) {
+  if (check.current <= check.baseline) return false;
+  final headroom = check.limit - check.baseline;
+  return check.current >= check.baseline + headroom * kNearLimitFraction;
 }
 
 /// One screen's line in the cross-screen report: its current [summary], the
 /// absolute [grade], and — when a baseline existed — the [status] and raw
 /// [comparison].
 class ScenarioReport {
+  /// Creates a report for [summary], deriving [grade] and [status] from it
+  /// and from [comparison].
   ScenarioReport({required this.summary, this.comparison, this.drift})
       : grade = gradeSummary(summary),
         status = regressionStatusFor(comparison);
@@ -199,8 +220,11 @@ String _statusLabel(RegressionStatus s) => switch (s) {
 String _paint(String text, String color, {required bool colored}) =>
     colored ? '$color$text$_ansiReset' : text;
 
-/// Renders a cross-screen summary table for the terminal. Pass `colored: false`
-/// when stdout is not a TTY (or `NO_COLOR` is set) to get plain text.
+/// Renders a cross-screen summary table of [reports] for the terminal.
+///
+/// Set [colored] to false when stdout is not a TTY (or `NO_COLOR` is set) to
+/// get plain text without ANSI escapes. Returns an empty string when [reports]
+/// is empty.
 String renderTerminalSummary(
   List<ScenarioReport> reports, {
   required bool colored,
@@ -209,11 +233,11 @@ String renderTerminalSummary(
   final scenarioWidth =
       reports.map((r) => r.summary.scenario.length).fold(8, math.max);
 
-  final buf = StringBuffer();
   final title = 'PERF SUMMARY (${reports.length} '
       'screen${reports.length == 1 ? '' : 's'})';
-  buf.writeln();
-  buf.writeln(_paint(title, _ansiBold, colored: colored));
+  final buf = StringBuffer()
+    ..writeln()
+    ..writeln(_paint(title, _ansiBold, colored: colored));
 
   for (final r in reports) {
     final s = r.summary;
@@ -246,10 +270,11 @@ String renderTerminalSummary(
 
   final drifted = reports.where((r) => r.drift?.drifted ?? false).toList();
   if (drifted.isNotEmpty) {
-    buf.writeln();
-    buf.writeln(
-      _paint('DRIFT since history began', _ansiBold, colored: colored),
-    );
+    buf
+      ..writeln()
+      ..writeln(
+        _paint('DRIFT since history began', _ansiBold, colored: colored),
+      );
     for (final r in drifted) {
       final d = r.drift!;
       buf.writeln(
@@ -266,7 +291,9 @@ String renderTerminalSummary(
   return buf.toString();
 }
 
-/// Formats a drift ratio as a signed percentage, e.g. `+42%` or `-8%`.
+/// Formats a drift [ratio] as a signed percentage, e.g. `+42%` or `-8%`.
+///
+/// An infinite ratio (drift from a zero reference) formats as `n/a`.
 String formatDriftRatio(double ratio) {
   if (ratio.isInfinite) return 'n/a';
   final pct = ratio * 100;
@@ -322,11 +349,11 @@ String _driftCell(PerfDrift? drift) {
 /// Renders a standalone, self-contained HTML report of all screens, with cells
 /// color-coded by absolute performance and a per-screen regression status.
 ///
-/// [generatedAtIso] is embedded verbatim in the header (pass an ISO-8601
-/// timestamp, or null to omit).
+/// [generatedAt], when given, is shown in the header as an ISO-8601
+/// timestamp.
 String renderHtmlReport(
   List<ScenarioReport> reports, {
-  String? generatedAtIso,
+  DateTime? generatedAt,
 }) {
   final rows = StringBuffer();
   for (final r in reports) {
@@ -351,9 +378,10 @@ String renderHtmlReport(
       </tr>''');
   }
 
-  final generated = generatedAtIso == null
+  final generated = generatedAt == null
       ? ''
-      : '<p class="meta">Generated ${_htmlEscape(generatedAtIso)}</p>';
+      : '<p class="meta">Generated '
+          '${_htmlEscape(generatedAt.toIso8601String())}</p>';
 
   return '''
 <!DOCTYPE html>
@@ -418,7 +446,8 @@ $generated
 $rows  </tbody>
 </table>
 <p class="legend">
-  Cell color = absolute performance vs the 60fps budget:
+  Cell color = absolute performance vs each screen's frame budget (one
+  refresh interval of the display it was measured on):
   <span class="good">good</span> &lt;50% of budget
   <span class="ok">ok</span> 50&ndash;100%
   <span class="poor">poor</span> over budget.

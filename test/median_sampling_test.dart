@@ -11,12 +11,16 @@ import 'package:frame_baseline/frame_baseline.dart'
     show PerfComparator, PerfSummary;
 // dart format on
 
-PerfSummary _summary(List<double> millis, {String scenario = 'demo'}) =>
+PerfSummary _summary(
+  List<double> millis, {
+  String scenario = 'demo',
+  double budget = 16.67,
+}) =>
     PerfSummary.fromDurations(
       scenario: scenario,
       buildMillis: millis,
       rasterMillis: millis,
-      frameBudgetMillis: 16.67,
+      frameBudgetMillis: budget,
     );
 
 void main() {
@@ -119,6 +123,39 @@ void main() {
         ]),
         throwsArgumentError,
       );
+    });
+
+    test('rejects samples captured at different frame budgets', () {
+      // Two 60 Hz and 120 Hz samples would median to a 12.5ms budget nobody
+      // ran at, and their missed-frame counts measure different things.
+      expect(
+        () => PerfSummary.medianOf([
+          _summary(const [4, 5, 6]),
+          _summary(const [4, 5, 6], budget: 1000 / 120),
+        ]),
+        throwsArgumentError,
+      );
+    });
+
+    test('ignores an empty capture when real ones exist', () {
+      // With an even count, an all-zero sample would be averaged into the
+      // middle pair and halve every metric — hiding a regression.
+      final median = PerfSummary.medianOf([
+        _summary(const []),
+        _summary(const [10, 10, 10]),
+      ]);
+
+      expect(median.sampledFrameCount, 3);
+      expect(median.build.p90, 10);
+    });
+
+    test('an all-empty sample set stays empty', () {
+      final median = PerfSummary.medianOf([
+        _summary(const []),
+        _summary(const []),
+      ]);
+
+      expect(median.sampledFrameCount, 0);
     });
   });
 }

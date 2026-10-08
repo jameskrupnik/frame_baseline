@@ -1,4 +1,6 @@
 // dart format off
+import 'dart:convert' show jsonDecode, jsonEncode;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frame_baseline/frame_baseline.dart'
     show PerfComparator, PerfSummary, PerfTolerance;
@@ -32,6 +34,19 @@ void main() {
       final s = _summary(buildMillis: [1, 2, 3, 40]);
       final restored = PerfSummary.fromJson(s.toJson());
       expect(restored.toJson(), s.toJson());
+    });
+
+    test('rejects an out-of-range number instead of reading it as infinity',
+        () {
+      // jsonDecode reads 1e400 as Infinity, and an infinite baseline gives an
+      // infinite limit that every later run passes.
+      final json = jsonDecode(
+        jsonEncode(_summary(buildMillis: [1, 2, 3]).toJson())
+            .replaceFirst(RegExp('"p90":[^,}]+'), '"p90":1e400'),
+      ) as Map<String, dynamic>;
+      expect((json['build'] as Map)['p90'], double.infinity);
+
+      expect(() => PerfSummary.fromJson(json), throwsFormatException);
     });
   });
 

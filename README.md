@@ -6,12 +6,6 @@ Capture a frame-timing snapshot of a screen, commit it as a baseline, and fail a
 run (locally or in CI) when a change regresses it — the same mental model as
 golden image tests, but for frames instead of pixels.
 
-> **Status: experimental (0.4.0).** Validated end to end against real engine
-> timings on real hardware — including catching an injected regression — but
-> baselines are only comparable on the device that recorded them. Read
-> [Known limitation: device variance](#known-limitation-device-variance) before
-> relying on this as a hard CI gate.
-
 ## Features
 
 - **Real engine frame timings** — build (UI thread) *and* raster (GPU thread),
@@ -50,7 +44,7 @@ and a decision table for when the gate goes red.
 - [CLI reference](#cli-reference)
 - [Public API](#public-api)
 - [Must run in PROFILE mode on a real device](#must-run-in-profile-mode-on-a-real-device)
-- [Known limitation: device variance](#known-limitation-device-variance)
+- [Device variance](#device-variance)
 - [Failed measurements fail loudly](#failed-measurements-fail-loudly)
 - [Contributing](#contributing)
 - [License](#license)
@@ -82,8 +76,7 @@ machine-parsable log line, so no VM-service timeline extraction is needed.
 
 ```yaml
 dev_dependencies:
-    frame_baseline:
-        git: https://github.com/jameskrupnik/frame_baseline.git
+    frame_baseline: ^0.4.0
     integration_test:
         sdk: flutter
 ```
@@ -95,7 +88,7 @@ driver you'll need to capture in profile mode.
 
 **1. Measure inside an integration test.** Capture each scenario a few times —
 single captures are too noisy to gate on (see
-[device variance](#known-limitation-device-variance)); the host takes the median
+[device variance](#device-variance)); the host takes the median
 of repeated lines for the same scenario.
 
 ```dart
@@ -170,10 +163,13 @@ screen, then produces a `PerfSummary`:
 - **build** (UI thread) and **raster** (GPU thread) frame-time stats:
   avg / p50 / p90 / p99 / worst
 - **missedBuildBudgetCount** / **missedRasterBudgetCount** — frames slower than
-  the 16.67 ms (60 fps) budget. This is the jank signal.
+  the frame budget. This is the jank signal.
 
-The budget is configurable via `frameBudgetMillis` (e.g. `1000 / 90` for a 90 Hz
-device).
+The budget is one refresh interval of the display being measured — 16.67 ms at
+60 Hz, 8.33 ms at 120 Hz — read from the display's reported refresh rate, with
+60 Hz as the fallback when none is reported. Pass `frameBudgetMillis` to judge
+every device against one fixed budget instead (e.g. `kDefaultFrameBudgetMillis`
+to keep comparing against baselines recorded at 60 Hz).
 
 ## Cross-screen overview report
 
@@ -195,7 +191,7 @@ passing ever since.
 
 Two independent signals per screen:
 
-- **Grade** — absolute performance vs the 60fps budget (`good` <50% of budget,
+- **Grade** — absolute performance vs the frame budget (`good` <50% of budget,
   `ok` 50–100%, `poor` over budget or janky). Baseline-independent, so it works
   even with `--update` before any baselines exist.
 - **vs baseline** — regression status (`ok` / `near-limit` / `REGRESSED`).
@@ -296,9 +292,15 @@ dart run frame_baseline:compare <device-log> [options]
 | `--label=SHA`          | Tag the history entry, so a drift can be traced to a commit.             |
 | `--fail-on-drift`      | Also exit non-zero on cumulative drift (requires `--history`).           |
 | `--fail-on-grade=G`    | Exit non-zero if any screen grades `G` or worse (`good`/`ok`/`poor`).   |
+| `--help`, `-h`         | Print usage and exit `0`.                                                |
 
-Exit codes: `0` all screens pass · `1` a regression, missing baseline, or no
-summaries found · `64`/`66` usage / file-not-found errors.
+Options that take a value must be written `--name=value`. An unknown option, a
+value written after a space (`--fail-on-grade poor`) or more than one log file
+is a usage error rather than being ignored, since an ignored flag would quietly
+switch a gate off.
+
+Exit codes: `0` all screens pass · `1` a regression, a missing or unreadable
+baseline, or no summaries found · `64` usage error · `66` log file not found.
 
 ## Public API
 
@@ -312,7 +314,7 @@ Import the barrel: `import 'package:frame_baseline/frame_baseline.dart';`
 | `PerfSummary` / `FrameStats` | Pure-Dart snapshot model with JSON round-trip.             |
 | `PerfSummary.medianOf()`     | Collapse repeated samples of a scenario to their median.   |
 | `PerfComparator` / `PerfTolerance` | Baseline-vs-current comparison with tolerance bands. |
-| `gradeSummary()` / `PerfGrade` | Absolute performance grade for a screen.                |
+| `gradeSummary()` / `PerfGrade` | Absolute performance grade for a screen; `PerfGrade.severity` orders grades and `PerfGrade.tryParse()` reads a threshold name. |
 | `regressionStatusFor()` / `RegressionStatus` | Regression verdict vs a baseline.         |
 | `PerfHistory` / `PerfHistoryEntry` | Append-only record of past runs (JSONL).             |
 | `parseHistory()` / `encodeHistoryEntries()` | Read and write that record.                 |
@@ -325,7 +327,7 @@ Debug-mode and simulator/emulator frame times are dominated by asserts/JIT and
 are **not** representative. Always measure with `flutter ... --profile` on real
 hardware.
 
-## Known limitation: device variance
+## Device variance
 
 Committed perf baselines are only meaningful on **consistent hardware under
 consistent load**. This is the central difficulty of the whole idea, and it is
@@ -353,14 +355,12 @@ cleanly, and an injected regression still fails all four build checks.
 *identical* across the two noisy runs. Percentile times are the noisy signal;
 janky-frame counts are the steady one. Weight your gate accordingly.
 
-Remaining mitigations, still on the user:
+Two more mitigations are up to you:
 
 - Pin one device (e.g. a single Firebase Test Lab model) for both baseline
   capture and comparison. Numbers are not portable across hardware.
 - Set `PerfTolerance` from *observed* run-to-run noise on your device, not
   guesses.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for where this still needs work.
 
 ## Failed measurements fail loudly
 

@@ -32,3 +32,6 @@ example/web/
 
 # adopt.sh rollback backup (local only)
 analysis_options.yaml.pre-standard
+
+# Test coverage output (flutter test --coverage)
+coverage/

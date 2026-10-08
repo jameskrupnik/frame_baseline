@@ -19,22 +19,27 @@ import 'package:frame_baseline/frame_baseline.dart'
         parseHistory;
 // dart format on
 
-PerfSummary _summary(double millis, {String scenario = 'demo'}) =>
+PerfSummary _summary(
+  double millis, {
+  String scenario = 'demo',
+  double budget = 16.67,
+}) =>
     PerfSummary.fromDurations(
       scenario: scenario,
       buildMillis: [millis, millis, millis],
       rasterMillis: const [1, 1, 1],
-      frameBudgetMillis: 16.67,
+      frameBudgetMillis: budget,
     );
 
 PerfHistoryEntry _entry(
   double millis, {
   String scenario = 'demo',
   int day = 1,
+  double budget = 16.67,
 }) =>
     PerfHistoryEntry(
       recordedAt: DateTime.utc(2026, 1, day),
-      summary: _summary(millis, scenario: scenario),
+      summary: _summary(millis, scenario: scenario, budget: budget),
       label: 'sha$day',
     );
 
@@ -50,6 +55,34 @@ void main() {
         isNull,
         reason: 'two runs is not a trend',
       );
+    });
+
+    test('only measures against history recorded at the same frame budget', () {
+      // A 60 Hz history and a 120 Hz run do not share a jank yardstick, and a
+      // reference window mixing the two cannot be medianed at all.
+      final history = [
+        _entry(4),
+        _entry(4, day: 2),
+        _entry(4, day: 3, budget: 1000 / 120),
+        _entry(4, day: 4, budget: 1000 / 120),
+      ];
+
+      expect(
+        analyzeDrift(
+          history: history,
+          current: _summary(4, budget: 1000 / 120),
+        ),
+        isNull,
+        reason: 'two runs at this budget is not a trend',
+      );
+
+      history.add(_entry(4, day: 5, budget: 1000 / 120));
+      final drift = analyzeDrift(
+        history: history,
+        current: _summary(4, budget: 1000 / 120),
+      )!;
+      expect(drift.reference.frameBudgetMillis, 1000 / 120);
+      expect(drift.totalSampleCount, 3);
     });
 
     test('anchors to the median of the oldest runs, not the newest', () {
@@ -144,6 +177,19 @@ void main() {
       final drift = analyzeDrift(history: history, current: current)!;
       expect(drift.worstP90DriftRatio, closeTo(1.0, 1e-9));
       expect(drift.drifted, isTrue);
+    });
+
+    test('the headline drift is build p90 when build drifted more', () {
+      final history = [
+        _entry(10),
+        _entry(10, day: 2),
+        _entry(10, day: 3),
+      ];
+
+      final drift = analyzeDrift(history: history, current: _summary(15))!;
+      expect(drift.buildP90DriftRatio, closeTo(0.5, 1e-9));
+      expect(drift.rasterP90DriftRatio, 0);
+      expect(drift.worstP90DriftRatio, drift.buildP90DriftRatio);
     });
   });
 

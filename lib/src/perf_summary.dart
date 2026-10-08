@@ -1,5 +1,6 @@
 // dart format off
 import 'package:frame_baseline/src/frame_stats.dart' show FrameStats;
+import 'package:frame_baseline/src/json_fields.dart' show readDouble, readField;
 // dart format on
 
 /// Median of [values]; the mean of the middle two when the count is even.
@@ -11,6 +12,9 @@ double _median(List<double> values) {
       : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
+/// Whether two frame budgets (ms) are the same, allowing for float noise.
+bool sameFrameBudget(double a, double b) => (a - b).abs() <= 1e-9;
+
 /// A jank-focused performance snapshot for a single driven screen scenario.
 ///
 /// `build` covers UI-thread frame build time; `raster` covers GPU-thread raster
@@ -19,6 +23,9 @@ double _median(List<double> values) {
 /// Pure Dart so the same model is used on-device (produced from `FrameTiming`s)
 /// and on the host (parsed from JSON for comparison against committed goldens).
 class PerfSummary {
+  /// Creates a summary from already-computed statistics.
+  ///
+  /// Use [PerfSummary.fromDurations] to compute one from raw frame durations.
   const PerfSummary({
     required this.scenario,
     required this.sampledFrameCount,
@@ -58,7 +65,12 @@ class PerfSummary {
   /// discards those one-off outliers (a background process, a shader compile)
   /// while preserving a real regression, which shifts every sample.
   ///
-  /// Throws [ArgumentError] if [samples] is empty or mixes scenarios.
+  /// Samples that captured no frames are left out when any sample did: with
+  /// an even count, an all-zero sample would be averaged into the middle pair
+  /// and pull every metric down.
+  ///
+  /// Throws [ArgumentError] if [samples] is empty, mixes scenarios, or mixes
+  /// frame budgets (a 60Hz and a 120Hz capture have no meaningful median).
   factory PerfSummary.medianOf(List<PerfSummary> samples) {
     if (samples.isEmpty) {
       throw ArgumentError.value(samples, 'samples', 'must not be empty');
@@ -71,10 +83,24 @@ class PerfSummary {
         'all samples must be for the same scenario',
       );
     }
-    if (samples.length == 1) return samples.first;
+    final budget = samples.first.frameBudgetMillis;
+    if (samples.any((s) => !sameFrameBudget(s.frameBudgetMillis, budget))) {
+      throw ArgumentError.value(
+        samples,
+        'samples',
+        'all samples must share one frame budget, but "$scenario" was '
+            'captured at different frame budgets '
+            '(${{
+          for (final s in samples) s.frameBudgetMillis,
+        }.join('ms, ')}ms)',
+      );
+    }
+    final captured = samples.where((s) => s.sampledFrameCount > 0).toList();
+    final used = captured.isEmpty ? samples : captured;
+    if (used.length == 1) return used.first;
 
     double med(double Function(PerfSummary) field) =>
-        _median(samples.map(field).toList());
+        _median(used.map(field).toList());
 
     return PerfSummary(
       scenario: scenario,
@@ -102,14 +128,21 @@ class PerfSummary {
   }
 
   /// Parses a summary from its [toJson] representation.
+  ///
+  /// Throws a [FormatException] if a field is missing or has the wrong type.
   factory PerfSummary.fromJson(Map<String, dynamic> json) => PerfSummary(
-        scenario: json['scenario'] as String,
-        sampledFrameCount: json['sampledFrameCount'] as int,
-        frameBudgetMillis: (json['frameBudgetMillis'] as num).toDouble(),
-        build: FrameStats.fromJson(json['build'] as Map<String, dynamic>),
-        raster: FrameStats.fromJson(json['raster'] as Map<String, dynamic>),
-        missedBuildBudgetCount: json['missedBuildBudgetCount'] as int,
-        missedRasterBudgetCount: json['missedRasterBudgetCount'] as int,
+        scenario: readField<String>(json, 'scenario'),
+        sampledFrameCount: readField<int>(json, 'sampledFrameCount'),
+        frameBudgetMillis: readDouble(json, 'frameBudgetMillis'),
+        build: FrameStats.fromJson(
+          readField<Map<String, dynamic>>(json, 'build'),
+        ),
+        raster: FrameStats.fromJson(
+          readField<Map<String, dynamic>>(json, 'raster'),
+        ),
+        missedBuildBudgetCount: readField<int>(json, 'missedBuildBudgetCount'),
+        missedRasterBudgetCount:
+            readField<int>(json, 'missedRasterBudgetCount'),
       );
 
   /// Identifier for the driven scenario, e.g. `chat_list_scroll`.
@@ -141,6 +174,8 @@ class PerfSummary {
   double get jankyRasterFrameRatio =>
       sampledFrameCount == 0 ? 0 : missedRasterBudgetCount / sampledFrameCount;
 
+  /// Converts this summary to a JSON-encodable map, the inverse of
+  /// [PerfSummary.fromJson]. This is the format of a committed baseline file.
   Map<String, dynamic> toJson() => {
         'scenario': scenario,
         'sampledFrameCount': sampledFrameCount,

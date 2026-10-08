@@ -1,5 +1,7 @@
 // dart format off
 import 'dart:math' as math show max;
+
+import 'package:frame_baseline/src/json_fields.dart' show readDouble;
 // dart format on
 
 /// Summary statistics for a series of per-frame durations, in milliseconds.
@@ -7,6 +9,9 @@ import 'dart:math' as math show max;
 /// Pure Dart (no Flutter/`dart:ui` imports) so it can be reused by the host
 /// comparator CLI as well as on-device measurement.
 class FrameStats {
+  /// Creates stats from already-computed values, in milliseconds.
+  ///
+  /// Use [FrameStats.fromMillis] to compute them from raw frame durations.
   const FrameStats({
     required this.average,
     required this.p50,
@@ -32,12 +37,14 @@ class FrameStats {
   }
 
   /// Parses stats from its [toJson] representation.
+  ///
+  /// Throws a [FormatException] if a field is missing or not a number.
   factory FrameStats.fromJson(Map<String, dynamic> json) => FrameStats(
-        average: (json['average'] as num).toDouble(),
-        p50: (json['p50'] as num).toDouble(),
-        p90: (json['p90'] as num).toDouble(),
-        p99: (json['p99'] as num).toDouble(),
-        worst: (json['worst'] as num).toDouble(),
+        average: readDouble(json, 'average'),
+        p50: readDouble(json, 'p50'),
+        p90: readDouble(json, 'p90'),
+        p99: readDouble(json, 'p99'),
+        worst: readDouble(json, 'worst'),
       );
 
   /// Mean frame duration (ms).
@@ -55,6 +62,8 @@ class FrameStats {
   /// Slowest single frame (ms).
   final double worst;
 
+  /// Converts these stats to a JSON-encodable map, the inverse of
+  /// [FrameStats.fromJson].
   Map<String, dynamic> toJson() => {
         'average': average,
         'p50': p50,

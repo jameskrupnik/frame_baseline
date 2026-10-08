@@ -2,7 +2,8 @@
 import 'package:frame_baseline/src/perf_comparator.dart'
     show PerfComparator, PerfComparison;
 import 'package:frame_baseline/src/perf_history.dart' show PerfHistoryEntry;
-import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
+import 'package:frame_baseline/src/perf_summary.dart'
+    show PerfSummary, sameFrameBudget;
 import 'package:frame_baseline/src/perf_tolerance.dart' show PerfTolerance;
 // dart format on
 
@@ -21,6 +22,7 @@ const int kDefaultReferenceWindow = 3;
 /// while the screen ends up far slower than where it started. Drift asks "are
 /// we slower than we used to be?", which no single comparison can answer.
 class PerfDrift {
+  /// Creates a drift result. Usually obtained from [analyzeDrift] instead.
   const PerfDrift({
     required this.scenario,
     required this.reference,
@@ -45,18 +47,22 @@ class PerfDrift {
   /// How many historical runs were medianed into [reference].
   final int referenceSampleCount;
 
-  /// Total runs recorded for this scenario.
+  /// Total runs recorded for this scenario at [current]'s frame budget.
   final int totalSampleCount;
 
-  /// True when cumulative drift exceeded the drift tolerance.
+  /// Whether cumulative drift exceeded the drift tolerance.
   bool get drifted => !comparison.passed;
 
-  /// Fractional change in build p90 since the reference (0.35 = 35% slower).
-  /// Negative means the screen got faster.
+  /// The fractional change in build p90 since the reference.
+  ///
+  /// 0.35 means 35% slower; negative means the screen got faster. Infinite
+  /// when the reference was zero and the current run is not.
   double get buildP90DriftRatio =>
       _ratio(reference.build.p90, current.build.p90);
 
-  /// Fractional change in raster p90 since the reference.
+  /// The fractional change in raster p90 since the reference.
+  ///
+  /// Same scale as [buildP90DriftRatio].
   double get rasterP90DriftRatio =>
       _ratio(reference.raster.p90, current.raster.p90);
 
@@ -74,8 +80,10 @@ class PerfDrift {
 /// Measures how far [current] has drifted from the start of [history].
 ///
 /// [history] must contain only entries for the scenario being analysed, oldest
-/// first. Returns null when there are fewer than [referenceWindow] historical
-/// runs — too little signal to call anything a trend.
+/// first. Entries recorded at a different frame budget from [current] (another
+/// device's refresh rate) are left out, since their jank counts measure
+/// something else. Returns null when fewer than [referenceWindow] runs remain —
+/// too little signal to call anything a trend.
 ///
 /// The anchor is the *oldest* window rather than a rolling one on purpose:
 /// anchoring to recent runs would let creep hide, since each new run quietly
@@ -88,9 +96,17 @@ PerfDrift? analyzeDrift({
   int referenceWindow = kDefaultReferenceWindow,
   PerfTolerance tolerance = PerfTolerance.drift,
 }) {
-  if (history.length < referenceWindow) return null;
+  final comparable = [
+    for (final e in history)
+      if (sameFrameBudget(
+        e.summary.frameBudgetMillis,
+        current.frameBudgetMillis,
+      ))
+        e,
+  ];
+  if (comparable.length < referenceWindow) return null;
 
-  final window = history.take(referenceWindow).toList(growable: false);
+  final window = comparable.take(referenceWindow).toList(growable: false);
   final reference = PerfSummary.medianOf(
     window.map((e) => e.summary).toList(growable: false),
   );
@@ -102,6 +118,6 @@ PerfDrift? analyzeDrift({
     comparison: PerfComparator(tolerance: tolerance)
         .compare(baseline: reference, current: current),
     referenceSampleCount: window.length,
-    totalSampleCount: history.length,
+    totalSampleCount: comparable.length,
   );
 }

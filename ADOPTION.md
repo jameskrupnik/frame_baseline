@@ -37,9 +37,10 @@ changes still adds up.
 ```
 
 Drift catches that by anchoring to where you started. And the grade gate is the
-backstop for both: a p90 over the 16.67ms budget is janky on whatever hardware
-measured it, no baseline required — which also catches the case where a screen
-was *baselined while already slow* and has been quietly "passing" ever since.
+backstop for both: a p90 over the frame budget (16.67ms at 60 Hz, 8.33ms at
+120 Hz) is janky on whatever hardware measured it, no baseline required — which
+also catches the case where a screen was *baselined while already slow* and has
+been quietly "passing" ever since.
 
 ## Setup
 
@@ -48,8 +49,7 @@ was *baselined while already slow* and has been quietly "passing" ever since.
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-    frame_baseline:
-        git: https://github.com/jameskrupnik/frame_baseline.git
+    frame_baseline: ^0.4.0
     integration_test:
         sdk: flutter
 ```
@@ -209,7 +209,7 @@ against.
 
 ## Wiring CI
 
-**The honest constraint:** measurement needs a real device in profile mode, and
+**The constraint:** measurement needs a real device in profile mode, and
 GitHub-hosted runners are shared VMs. Their timing noise will exceed your
 tolerances and the gate will flap. Measured on an *idle* dedicated machine,
 back-to-back runs of identical code still moved p90 by 27%; a contended cloud VM
@@ -336,7 +336,7 @@ only whether users would see jank.
 
 Enable it once every measured screen is at or under budget. If a screen is
 legitimately over budget today, this fails permanently until you fix it (there's
-no per-scenario exclusion yet), so land it after the cleanup rather than before.
+no per-scenario exclusion), so land it after the cleanup rather than before.
 
 ## When it goes red
 

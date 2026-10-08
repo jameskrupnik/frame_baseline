@@ -1,50 +1,67 @@
 // dart format off
-import 'dart:convert' show JsonEncoder, jsonDecode;
+import 'dart:convert' show JsonEncoder;
 import 'dart:io' show File, FileMode, Platform, exit, stderr, stdout;
 
 // Import the pure-Dart sources directly rather than the barrel: the barrel
 // re-exports measure_screen_performance.dart, which pulls in Flutter/dart:ui and
 // would prevent this CLI from running under the standalone Dart VM.
+import 'package:frame_baseline/src/json_fields.dart' show decodeJsonObject;
 import 'package:frame_baseline/src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
 import 'package:frame_baseline/src/perf_history.dart'
     show PerfHistoryEntry, encodeHistoryEntries, parseHistory;
 import 'package:frame_baseline/src/perf_report.dart'
-    show
-        ScenarioReport,
-        gradeSeverity,
-        parseGrade,
-        renderHtmlReport,
-        renderTerminalSummary;
+    show PerfGrade, ScenarioReport, renderHtmlReport, renderTerminalSummary;
 import 'package:frame_baseline/src/perf_reporter.dart'
     show extractPerfSummaries, kPerfSummaryMarker;
-import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
+import 'package:frame_baseline/src/perf_summary.dart'
+    show PerfSummary, sameFrameBudget;
 import 'package:frame_baseline/src/perf_trend.dart' show analyzeDrift;
 // dart format on
+
+const _defaultBaselineDir = 'perf/baselines';
+const _encoder = JsonEncoder.withIndent('  ');
+
+const _usage = 'Usage: dart run frame_baseline:compare '
+    '<device-log-file> [--baseline-dir=DIR] [--update] [--report=FILE.html] '
+    '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
+    '[--fail-on-grade=good|ok|poor]';
+
+/// Options that are switched on by their presence alone.
+const _flags = {'--update', '--fail-on-drift'};
+
+/// Options that take a value, written as `--name=value`.
+const _valuedOptions = {
+  '--baseline-dir',
+  '--report',
+  '--history',
+  '--label',
+  '--fail-on-grade',
+};
 
 /// Host-side gate: extracts on-device [PerfSummary] JSON from a device/CI log,
 /// then either compares each scenario against its committed golden baseline or
 /// (with `--update`) rewrites those baselines.
 ///
-/// ```
+/// ```sh
 /// dart run frame_baseline:compare <log> \
 ///     [--baseline-dir=DIR] [--update] [--report=FILE.html] \
 ///     [--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] \
 ///     [--fail-on-grade=poor]
 /// ```
 ///
-/// Exit code is non-zero if any scenario regressed or a baseline is missing,
-/// so it works directly as a CI gate. `--report` writes a color-coded HTML
-/// overview of every screen (works in `--update` mode too, for an at-a-glance
-/// view even before baselines exist).
+/// Exit code is non-zero if any scenario regressed, a baseline is missing or
+/// unreadable, or the arguments are malformed, so it works directly as a CI
+/// gate. `--report` writes a color-coded HTML overview of every screen (works
+/// in `--update` mode too, for an at-a-glance view even before baselines
+/// exist).
 ///
 /// `--history` appends each run to an append-only JSONL log and reports how far
 /// each scenario has drifted since that history began — the slow-creep case a
 /// single baseline comparison structurally cannot catch.
-const _defaultBaselineDir = 'perf/baselines';
-const _encoder = JsonEncoder.withIndent('  ');
-
 void main(List<String> args) {
+  _exitOnHelpOrUsageError(args);
+
   final update = args.contains('--update');
   final failOnDrift = args.contains('--fail-on-drift');
   final baselineDir =
@@ -52,15 +69,10 @@ void main(List<String> args) {
   final reportPath = _optionValue(args, '--report');
   final historyPath = _optionValue(args, '--history');
   final label = _optionValue(args, '--label');
-  final positional = args.where((a) => !a.startsWith('--')).toList();
+  final positional = args.where((a) => !a.startsWith('-')).toList();
 
   if (positional.isEmpty) {
-    stderr.writeln(
-      'Usage: dart run frame_baseline:compare '
-      '<device-log-file> [--baseline-dir=DIR] [--update] [--report=FILE.html] '
-      '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
-      '[--fail-on-grade=good|ok|poor]',
-    );
+    stderr.writeln(_usage);
     exit(64);
   }
 
@@ -70,7 +82,8 @@ void main(List<String> args) {
   }
 
   final gradeLimitName = _optionValue(args, '--fail-on-grade');
-  final gradeLimit = gradeLimitName == null ? null : parseGrade(gradeLimitName);
+  final gradeLimit =
+      gradeLimitName == null ? null : PerfGrade.tryParse(gradeLimitName);
   if (gradeLimitName != null && gradeLimit == null) {
     stderr.writeln(
       'Unknown --fail-on-grade value "$gradeLimitName" '
@@ -104,10 +117,32 @@ void main(List<String> args) {
   for (final s in summaries) {
     grouped.putIfAbsent(s.scenario, () => []).add(s);
   }
-  final medians = [
-    for (final entry in grouped.entries) PerfSummary.medianOf(entry.value),
-  ];
+  var failed = false;
+  final clashing = _caseClashes(grouped.keys);
+  final medians = <PerfSummary>[];
   for (final entry in grouped.entries) {
+    final twins = clashing[entry.key];
+    if (twins != null) {
+      stderr.writeln(
+        'Refusing scenario "${entry.key}": it differs only by case from '
+        '${twins.map((n) => '"$n"').join(', ')}, so on a case-insensitive '
+        'file system (macOS, Windows) both would share one baseline file.',
+      );
+      failed = true;
+      continue;
+    }
+    // Samples from displays with different refresh rates have no median.
+    final budgets = {for (final s in entry.value) s.frameBudgetMillis};
+    if (budgets.any((b) => !sameFrameBudget(b, budgets.first))) {
+      stderr.writeln(
+        'Refusing scenario "${entry.key}": its samples were captured at '
+        'different frame budgets (${budgets.join('ms, ')}ms), so they come '
+        'from different displays and have no meaningful median.',
+      );
+      failed = true;
+      continue;
+    }
+    medians.add(PerfSummary.medianOf(entry.value));
     if (entry.value.length > 1) {
       stdout.writeln(
         'Using median of ${entry.value.length} samples for "${entry.key}".',
@@ -123,12 +158,22 @@ void main(List<String> args) {
       : null;
   history?.errors.forEach(stderr.writeln);
 
-  var failed = false;
   var drifted = false;
   const comparator = PerfComparator();
   final reports = <ScenarioReport>[];
 
   for (final current in medians) {
+    // The scenario name comes from the log and becomes a file name, so a name
+    // like `../x` would write outside --baseline-dir under --update.
+    if (!_isSafeScenarioName(current.scenario)) {
+      stderr.writeln(
+        'Refusing scenario "${current.scenario}": a scenario name is used as '
+        'a file name, so it must not be empty or contain a path separator or '
+        '"..".',
+      );
+      failed = true;
+      continue;
+    }
     final baselineFile = File('$baselineDir/${current.scenario}.perf.json');
 
     final drift = history == null
@@ -171,9 +216,12 @@ void main(List<String> args) {
       continue;
     }
 
-    final baseline = PerfSummary.fromJson(
-      jsonDecode(baselineFile.readAsStringSync()) as Map<String, dynamic>,
-    );
+    final baseline = _readBaseline(baselineFile);
+    if (baseline == null) {
+      failed = true;
+      reports.add(ScenarioReport(summary: current, drift: drift));
+      continue;
+    }
     final result = comparator.compare(baseline: baseline, current: current);
     _printReport(result);
     reports.add(
@@ -186,7 +234,9 @@ void main(List<String> args) {
   // time without influencing its own verdict. Scenarios whose capture was
   // rejected are excluded — recording a dead run would poison the trend.
   if (historyFile != null) {
-    final now = DateTime.now();
+    // UTC, so a history shared by CI and laptops in other time zones records
+    // one unambiguous instant per run.
+    final now = DateTime.now().toUtc();
     final entries = [
       for (final s in medians)
         if (s.sampledFrameCount > 0)
@@ -195,7 +245,8 @@ void main(List<String> args) {
     if (entries.isNotEmpty) {
       historyFile.parent.createSync(recursive: true);
       historyFile.writeAsStringSync(
-        encodeHistoryEntries(entries),
+        '${_needsLeadingNewline(historyFile) ? '\n' : ''}'
+        '${encodeHistoryEntries(entries)}',
         mode: FileMode.append,
       );
       stdout.writeln(
@@ -214,7 +265,7 @@ void main(List<String> args) {
     reportFile.writeAsStringSync(
       renderHtmlReport(
         reports,
-        generatedAtIso: DateTime.now().toIso8601String(),
+        generatedAt: DateTime.now().toUtc(),
       ),
     );
     stdout.writeln('Wrote HTML report: ${reportFile.path}');
@@ -227,9 +278,9 @@ void main(List<String> args) {
   // baseline happens to say. Catches the case where a baseline was recorded
   // from an already-slow screen and every later run dutifully "passes".
   if (gradeLimit != null) {
-    final threshold = gradeSeverity(gradeLimit);
+    final threshold = gradeLimit.severity;
     for (final r in reports) {
-      if (gradeSeverity(r.grade) >= threshold) {
+      if (r.grade.severity >= threshold) {
         stderr.writeln(
           '"${r.summary.scenario}" grades ${r.grade.name}, at or below the '
           '--fail-on-grade=${gradeLimit.name} threshold.',
@@ -248,6 +299,96 @@ String? _optionValue(List<String> args, String name) {
     if (a.startsWith(prefix)) return a.substring(prefix.length);
   }
   return null;
+}
+
+/// Exits 0 after printing usage for `--help`, or 64 for malformed [args].
+///
+/// A CI gate must not guess. An unrecognised or misspelt option, or
+/// `--fail-on-grade poor` written with a space, would otherwise be ignored and
+/// silently switch a gate off while the build stays green.
+void _exitOnHelpOrUsageError(List<String> args) {
+  if (args.contains('--help') || args.contains('-h')) {
+    stdout.writeln(_usage);
+    exit(0);
+  }
+  final usageError = _validateArgs(args);
+  if (usageError != null) {
+    stderr
+      ..writeln(usageError)
+      ..writeln(_usage);
+    exit(64);
+  }
+}
+
+/// Returns a message describing the first malformed argument, or null when
+/// every argument is a known option or the single log-file path.
+String? _validateArgs(List<String> args) {
+  var positionalCount = 0;
+  for (final arg in args) {
+    if (!arg.startsWith('-')) {
+      positionalCount++;
+      if (positionalCount > 1) {
+        return 'Unexpected argument "$arg": only one log file is accepted. '
+            'Options that take a value must be written as --name=value.';
+      }
+      continue;
+    }
+    final eq = arg.indexOf('=');
+    final name = eq == -1 ? arg : arg.substring(0, eq);
+    if (_flags.contains(name)) {
+      if (eq != -1) return '$name does not take a value.';
+      continue;
+    }
+    if (_valuedOptions.contains(name)) {
+      if (eq == -1 || eq == arg.length - 1) {
+        return '$name needs a value, written as $name=VALUE.';
+      }
+      continue;
+    }
+    return 'Unknown option "$arg".';
+  }
+  return null;
+}
+
+/// Whether [scenario] is safe to use as a baseline file name.
+bool _isSafeScenarioName(String scenario) =>
+    scenario.isNotEmpty &&
+    !scenario.contains('/') &&
+    !scenario.contains(r'\') &&
+    !scenario.contains('..');
+
+/// Maps each name in [names] that collides with others when case is ignored
+/// to those others.
+Map<String, List<String>> _caseClashes(Iterable<String> names) {
+  final byFolded = <String, List<String>>{};
+  for (final name in names) {
+    byFolded.putIfAbsent(name.toLowerCase(), () => []).add(name);
+  }
+  return {
+    for (final group in byFolded.values)
+      if (group.length > 1)
+        for (final name in group) name: [...group]..remove(name),
+  };
+}
+
+/// Whether [file] has content that does not end in a newline, so an append
+/// would be glued onto its last line (a hand edit, or a write cut short).
+bool _needsLeadingNewline(File file) {
+  if (!file.existsSync()) return false;
+  final bytes = file.readAsBytesSync();
+  return bytes.isNotEmpty && bytes.last != 0x0A;
+}
+
+/// Reads a committed baseline, or reports why it could not be read and
+/// returns null. A corrupt golden fails the gate with its path rather than a
+/// stack trace.
+PerfSummary? _readBaseline(File file) {
+  try {
+    return PerfSummary.fromJson(decodeJsonObject(file.readAsStringSync()));
+  } on FormatException catch (e) {
+    stderr.writeln('Unreadable baseline ${file.path}: ${e.message}');
+    return null;
+  }
 }
 
 void _printReport(PerfComparison result) {

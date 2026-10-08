@@ -10,9 +10,60 @@
   fail any screen whose p90 exceeds the frame budget. Unlike the baseline
   comparison this needs no golden and is portable across devices, and it closes
   a real blind spot: a screen baselined while already slow passes its baseline
-  comparison indefinitely. New `gradeSeverity()` and `parseGrade()` helpers.
+  comparison indefinitely. `PerfGrade.severity` orders grades and
+  `PerfGrade.tryParse()` reads a threshold name.
+- **The CLI rejects arguments it does not understand** (exit `64`): an unknown
+  or misspelt option, a value written after a space (`--fail-on-grade poor`),
+  a value on an on/off flag, or a second log file. Each of these was previously
+  ignored, which silently switched a gate off. `--help` prints usage.
+- A corrupt baseline file now fails the gate with its path instead of crashing
+  with a stack trace.
+- A scenario name containing a path separator or `..` is refused (exit `1`)
+  instead of being used as a file name, which under `--update` could write
+  outside `--baseline-dir`.
+- **Breaking:** `renderHtmlReport` takes `DateTime? generatedAt` instead of
+  `String? generatedAtIso`.
+- `PerfSummary.fromJson`, `FrameStats.fromJson` and `PerfHistoryEntry.fromJson`
+  throw a `FormatException` naming the bad field, instead of a `TypeError`, on
+  JSON of the wrong shape. `extractPerfSummaries` and `parseHistory` now collect
+  such lines as errors rather than letting them abort the run.
 - `example/tool/perf.sh` — the reference capture-and-compare script from the
   guide, kept in the repo so it's exercised rather than aspirational.
+- **The frame budget follows the display.** `measureScreenPerformance` used a
+  fixed 60 Hz budget (16.67ms), so on a 120 Hz phone a frame could take twice
+  its real budget and still not count as missed, and grades were too generous.
+  `frameBudgetMillis` is now optional and defaults to one refresh interval of
+  the display (8.33ms at 120 Hz), falling back to 60 Hz when the display
+  reports no rate; pass it to keep one fixed budget. It now throws
+  `ArgumentError` if it is not a positive, finite number. Baselines recorded
+  on a high-refresh device before this change were judged at 60 Hz: re-record
+  them, or pass `frameBudgetMillis: kDefaultFrameBudgetMillis`. Requires
+  Flutter 3.13 (for `FlutterView.display`).
+- **`near-limit` no longer fires on unchanged runs.** Nearness was measured as
+  90% of the limit itself, so any metric whose tolerance was under ~11% —
+  including the missed-frame count of any janky screen — read `near-limit`
+  against a baseline recorded from the same capture. It is now 90% of the
+  headroom between baseline and limit; a run no worse than its baseline is
+  never near its limit.
+- Frames the engine finished before the measured action began are no longer
+  counted. Outside release mode the engine delivers timings in ~100ms
+  batches, so a sample's first batch could include the previous sample's
+  frames (for example its scroll-back).
+- `PerfSummary.medianOf` throws `ArgumentError` for samples at different frame
+  budgets instead of inventing a budget between them, and leaves out empty
+  captures, which with an even sample count halved every metric. The CLI
+  refuses such a scenario (exit `1`) and carries on with the others.
+- Drift is measured only against history recorded at the current run's frame
+  budget, so runs from another device's refresh rate no longer skew (or crash)
+  the reference.
+- The CLI refuses scenario names that differ only by case, which share one
+  baseline file on macOS and Windows.
+- A history file that does not end in a newline no longer swallows the next
+  run's entry. History timestamps and the HTML report's time are written in
+  UTC.
+- Baseline and history numbers that `jsonDecode` reads as infinity (`1e400`)
+  are rejected; an infinite baseline passed every run.
+- The HTML report no longer says cells are graded against a 60fps budget.
 
 ## 0.3.0
 
@@ -41,9 +92,6 @@ the default gate and total +98%.
   can't poison the trend.
 
 ## 0.2.0
-
-First release validated end to end against real engine frame timings on real
-hardware, via the new `example/` app.
 
 Fixed — silent green on failed measurements:
 
@@ -82,7 +130,7 @@ Added — `example/`:
 
 ## 0.1.0
 
-Initial release. Experimental — API may change.
+Initial release.
 
 Measurement & model:
 

@@ -44,7 +44,7 @@ void main() {
             await tester.pump();
           },
         );
-      } catch (e) {
+      } on InsufficientFrameDataException catch (e) {
         caught = e;
       }
 
