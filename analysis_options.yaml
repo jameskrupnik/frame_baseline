@@ -29,12 +29,6 @@ linter:
   rules:
     # --- Off, with reasons -------------------------------------------------
 
-    # These are apps, not published packages. A doc comment on every public
-    # member buys a wall of `/// The name.` restatements, which is the
-    # opposite of readable — and it would drown the comments in these repos
-    # that are genuinely worth reading.
-    public_member_api_docs: false
-
     # **This rule breaks `math.max`/`math.min` and it broke five apps here.**
     # Rewriting `math.max(0.0, x)` to `math.max(0, x)` selects the `num`
     # overload instead of the `double` one, so the result no longer assigns to
@@ -59,6 +53,11 @@ linter:
     no_leading_underscores_for_local_identifiers: false
 
     # --- On, and not in the base set ---------------------------------------
+
+    # This is a published package, not an app: every public member is API
+    # surface on pub.dev, and pana scores the share that is documented. (The
+    # workspace default turns it off for apps.)
+    public_member_api_docs: true
 
     # The four that push a `build` method toward widgets and away from
     # hand-rolled containers.
