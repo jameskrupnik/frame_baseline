@@ -2,6 +2,9 @@
 
 ## 0.4.0
 
+- Baselines and history lines carry `"schemaVersion": 1`. Readers treat a
+  missing field as version 1 and throw a `FormatException` for a version they
+  do not know, so a future format change cannot be misread silently.
 - **`ADOPTION.md`** — a practical guide to running this in a real repo: the
   three gates and what each catches, setup, the local routine, copy-paste CI
   workflows, a decision table for when the gate goes red, and how to tune

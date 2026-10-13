@@ -2,7 +2,7 @@
 import 'dart:convert' show jsonEncode;
 
 import 'package:frame_baseline/src/json_fields.dart'
-    show decodeJsonObject, readField;
+    show checkSchemaVersion, decodeJsonObject, kSchemaVersion, readField;
 
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 

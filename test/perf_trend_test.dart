@@ -6,6 +6,8 @@
 // accepted change the baseline moves with it.
 
 // dart format off
+import 'dart:convert' show jsonEncode;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frame_baseline/frame_baseline.dart'
     show
@@ -218,6 +220,26 @@ void main() {
 
       expect(parsed.entries, hasLength(2));
       expect(parsed.errors, hasLength(1));
+    });
+
+    test('writes schemaVersion 1 on every line', () {
+      expect(_entry(4).toJson()['schemaVersion'], 1);
+    });
+
+    test('reads a line written before schemaVersion existed', () {
+      final json = _entry(4).toJson()..remove('schemaVersion');
+
+      expect(PerfHistoryEntry.fromJson(json).summary.build.p90, 4);
+    });
+
+    test('skips a line with a schemaVersion it does not know', () {
+      final json = _entry(4).toJson()..['schemaVersion'] = 2;
+
+      expect(
+        () => PerfHistoryEntry.fromJson(json),
+        throwsFormatException,
+      );
+      expect(parseHistory('${jsonEncode(json)}\n').errors, hasLength(1));
     });
 
     test('ignores blank lines', () {

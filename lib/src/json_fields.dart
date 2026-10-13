@@ -41,3 +41,24 @@ double readDouble(Map<String, dynamic> json, String key) {
   if (value.isFinite) return value;
   throw FormatException('expected "$key" to be a finite number, got $value');
 }
+
+/// The version of the baseline and history JSON this package writes.
+///
+/// Every baseline and history line carries it as `schemaVersion`, so a later
+/// release that changes the shape can tell old files from new ones instead of
+/// misreading them.
+const int kSchemaVersion = 1;
+
+/// Throws a [FormatException] unless [json] is in a schema version this
+/// package can read.
+///
+/// A missing `schemaVersion` reads as 1: files written before the field
+/// existed have the version-1 shape.
+void checkSchemaVersion(Map<String, dynamic> json) {
+  final version = readField<int?>(json, 'schemaVersion') ?? 1;
+  if (version == kSchemaVersion) return;
+  throw FormatException(
+    'unsupported schemaVersion $version; this version of frame_baseline '
+    'reads $kSchemaVersion',
+  );
+}

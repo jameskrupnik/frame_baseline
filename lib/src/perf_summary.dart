@@ -1,6 +1,7 @@
 // dart format off
 import 'package:frame_baseline/src/frame_stats.dart' show FrameStats;
-import 'package:frame_baseline/src/json_fields.dart' show readDouble, readField;
+import 'package:frame_baseline/src/json_fields.dart'
+    show checkSchemaVersion, kSchemaVersion, readDouble, readField;
 // dart format on
 
 /// Median of [values]; the mean of the middle two when the count is even.
@@ -129,21 +130,24 @@ class PerfSummary {
 
   /// Parses a summary from its [toJson] representation.
   ///
-  /// Throws a [FormatException] if a field is missing or has the wrong type.
-  factory PerfSummary.fromJson(Map<String, dynamic> json) => PerfSummary(
-        scenario: readField<String>(json, 'scenario'),
-        sampledFrameCount: readField<int>(json, 'sampledFrameCount'),
-        frameBudgetMillis: readDouble(json, 'frameBudgetMillis'),
-        build: FrameStats.fromJson(
-          readField<Map<String, dynamic>>(json, 'build'),
-        ),
-        raster: FrameStats.fromJson(
-          readField<Map<String, dynamic>>(json, 'raster'),
-        ),
-        missedBuildBudgetCount: readField<int>(json, 'missedBuildBudgetCount'),
-        missedRasterBudgetCount:
-            readField<int>(json, 'missedRasterBudgetCount'),
-      );
+  /// Throws a [FormatException] if a field is missing or has the wrong type,
+  /// or if `schemaVersion` is one this package cannot read.
+  factory PerfSummary.fromJson(Map<String, dynamic> json) {
+    checkSchemaVersion(json);
+    return PerfSummary(
+      scenario: readField<String>(json, 'scenario'),
+      sampledFrameCount: readField<int>(json, 'sampledFrameCount'),
+      frameBudgetMillis: readDouble(json, 'frameBudgetMillis'),
+      build: FrameStats.fromJson(
+        readField<Map<String, dynamic>>(json, 'build'),
+      ),
+      raster: FrameStats.fromJson(
+        readField<Map<String, dynamic>>(json, 'raster'),
+      ),
+      missedBuildBudgetCount: readField<int>(json, 'missedBuildBudgetCount'),
+      missedRasterBudgetCount: readField<int>(json, 'missedRasterBudgetCount'),
+    );
+  }
 
   /// Identifier for the driven scenario, e.g. `chat_list_scroll`.
   final String scenario;
@@ -177,6 +181,7 @@ class PerfSummary {
   /// Converts this summary to a JSON-encodable map, the inverse of
   /// [PerfSummary.fromJson]. This is the format of a committed baseline file.
   Map<String, dynamic> toJson() => {
+        'schemaVersion': kSchemaVersion,
         'scenario': scenario,
         'sampledFrameCount': sampledFrameCount,
         'frameBudgetMillis': frameBudgetMillis,

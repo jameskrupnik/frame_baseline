@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "scenario": "janky_list_scroll",
   "sampledFrameCount": 105,
   "frameBudgetMillis": 16.666666666666668,

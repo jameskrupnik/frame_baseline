@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "scenario": "smooth_list_scroll",
   "sampledFrameCount": 115,
   "frameBudgetMillis": 16.666666666666668,

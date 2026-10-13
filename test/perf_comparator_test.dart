@@ -48,6 +48,24 @@ void main() {
 
       expect(() => PerfSummary.fromJson(json), throwsFormatException);
     });
+
+    test('writes schemaVersion 1', () {
+      expect(_summary(buildMillis: [1, 2, 3]).toJson()['schemaVersion'], 1);
+    });
+
+    test('reads a baseline written before schemaVersion existed', () {
+      final json = _summary(buildMillis: [1, 2, 3]).toJson()
+        ..remove('schemaVersion');
+
+      expect(PerfSummary.fromJson(json).build.worst, 3);
+    });
+
+    test('rejects a schemaVersion it does not know', () {
+      final json = _summary(buildMillis: [1, 2, 3]).toJson()
+        ..['schemaVersion'] = 2;
+
+      expect(() => PerfSummary.fromJson(json), throwsFormatException);
+    });
   });
 
   group('PerfComparator', () {
