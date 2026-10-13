@@ -102,24 +102,8 @@ Future<PerfSummary> measureScreenPerformance({
   int minSampledFrames = kDefaultMinSampledFrames,
   Duration settleDuration = Duration.zero,
 }) async {
-  if (frameBudgetMillis != null &&
-      !(frameBudgetMillis.isFinite && frameBudgetMillis > 0)) {
-    throw ArgumentError.value(
-      frameBudgetMillis,
-      'frameBudgetMillis',
-      'must be a positive, finite number of milliseconds',
-    );
-  }
-  final budget = frameBudgetMillis ?? _displayFrameBudgetMillis();
-
-  if (!kProfileMode) {
-    debugPrint(
-      'frame_baseline: WARNING - measuring "$scenario" in '
-      '${kDebugMode ? 'debug' : 'release'} mode. Frame times are only '
-      'representative in PROFILE mode on real hardware; do not commit these '
-      'numbers as a baseline.',
-    );
-  }
+  final budget = _frameBudget(frameBudgetMillis);
+  if (!kProfileMode) _warnOutsideProfileMode(scenario);
 
   // Outside release mode the framework registers a timings callback of its
   // own, so the engine is always collecting and its next batch can hold frames
@@ -162,6 +146,27 @@ Future<PerfSummary> measureScreenPerformance({
     frameBudgetMillis: budget,
   );
 }
+
+/// Validates a caller's [frameBudgetMillis], or reads the display's budget
+/// when it is null.
+double _frameBudget(double? frameBudgetMillis) {
+  if (frameBudgetMillis == null) return _displayFrameBudgetMillis();
+  if (frameBudgetMillis.isFinite && frameBudgetMillis > 0) {
+    return frameBudgetMillis;
+  }
+  throw ArgumentError.value(
+    frameBudgetMillis,
+    'frameBudgetMillis',
+    'must be a positive, finite number of milliseconds',
+  );
+}
+
+void _warnOutsideProfileMode(String scenario) => debugPrint(
+      'frame_baseline: WARNING - measuring "$scenario" in '
+      '${kDebugMode ? 'debug' : 'release'} mode. Frame times are only '
+      'representative in PROFILE mode on real hardware; do not commit these '
+      'numbers as a baseline.',
+    );
 
 /// One refresh interval of the display the app draws on, in milliseconds, or
 /// [kDefaultFrameBudgetMillis] when the app has no implicit view (a
