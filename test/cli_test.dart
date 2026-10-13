@@ -633,4 +633,21 @@ void main() {
       expect(result.stderr, isNot(contains('Missing scenario')));
     });
   });
+
+  test('does not record a refused scenario name in the history', () {
+    final history = File('${tmp.path}/history.jsonl');
+
+    final result = run(
+      [
+        _logLine(_summary(const [4, 5, 6, 7, 8], scenario: '../escaped')),
+      ],
+      args: ['--update', '--history=${history.path}'],
+    );
+
+    expect(result.exitCode, 1);
+    expect(
+      history.existsSync() ? history.readAsStringSync() : '',
+      isNot(contains('escaped')),
+    );
+  });
 }

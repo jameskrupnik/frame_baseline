@@ -128,6 +128,18 @@ void main(List<String> args) {
   final clashing = _caseClashes(grouped.keys);
   final medians = <PerfSummary>[];
   for (final entry in grouped.entries) {
+    // The scenario name comes from the log and becomes a file name, so a name
+    // like `../x` would write outside --baseline-dir under --update. Refused
+    // here, before the median, so it never reaches the history either.
+    if (!_isSafeScenarioName(entry.key)) {
+      stderr.writeln(
+        'Refusing scenario "${entry.key}": a scenario name is used as '
+        'a file name, so it must not be empty or contain a path separator or '
+        '"..".',
+      );
+      failed = true;
+      continue;
+    }
     final twins = clashing[entry.key];
     if (twins != null) {
       stderr.writeln(
@@ -170,17 +182,6 @@ void main(List<String> args) {
   final reports = <ScenarioReport>[];
 
   for (final current in medians) {
-    // The scenario name comes from the log and becomes a file name, so a name
-    // like `../x` would write outside --baseline-dir under --update.
-    if (!_isSafeScenarioName(current.scenario)) {
-      stderr.writeln(
-        'Refusing scenario "${current.scenario}": a scenario name is used as '
-        'a file name, so it must not be empty or contain a path separator or '
-        '"..".',
-      );
-      failed = true;
-      continue;
-    }
     final baselineFile = File('$baselineDir/${current.scenario}.perf.json');
 
     final drift = history == null
