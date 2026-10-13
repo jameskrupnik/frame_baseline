@@ -2,7 +2,8 @@
 ///
 /// Drive a screen inside `measureScreenPerformance` to capture a `PerfSummary`,
 /// emit it with `reportPerfSummary`, then compare against a committed baseline
-/// with `PerfComparator` (see the `frame_baseline_compare` CLI in `bin/`).
+/// with `PerfComparator`, or from the host with
+/// `dart run frame_baseline:compare <device-log>`.
 library;
 
 export 'src/frame_stats.dart' show FrameStats;

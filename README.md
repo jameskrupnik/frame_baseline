@@ -23,8 +23,10 @@ golden image tests, but for frames instead of pixels.
   moving baseline structurally cannot: many green changes still add up.
 - **Cross-screen overview** — a color-coded terminal summary and an optional
   shareable HTML report showing which screens are healthy at a glance.
-- **Pure-Dart host CLI** — the comparison and reporting layer runs under the
-  standalone Dart VM, no Flutter toolchain needed on the host.
+- **Host-side CLI** — `dart run frame_baseline:compare` reads the device log
+  on your machine, with no device attached. The package depends on the Flutter
+  SDK, so run it from your Flutter project with the Flutter toolchain
+  installed, as you would `flutter test`.
 
 **Setting this up in a real repo?** [ADOPTION.md](ADOPTION.md) is the practical
 guide: the three gates and what each catches, the local routine, copy-paste CI,

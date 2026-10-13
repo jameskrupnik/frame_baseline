@@ -39,7 +39,8 @@ history recording with cumulative drift detection.
 
 ## Guidelines
 
-- Keep the core (`lib/src/*` except `measure_screen_performance.dart`) pure Dart
-  so the CLI can run under the standalone VM.
+- Keep the core (`lib/src/*` except `measure_screen_performance.dart`) pure Dart:
+  `dart run frame_baseline:compare` runs on the Dart VM, which cannot load
+  `dart:ui`.
 - Add tests for new comparison logic.
 - Discuss larger changes in an issue first.
