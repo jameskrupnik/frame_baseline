@@ -1,6 +1,7 @@
 // dart format off
 import 'dart:math' as math show max;
 
+import 'package:frame_baseline/src/frame_stats.dart' show FrameStats;
 import 'package:frame_baseline/src/perf_summary.dart'
     show PerfSummary, sameFrameBudget;
 import 'package:frame_baseline/src/perf_tolerance.dart' show PerfTolerance;
@@ -44,23 +45,15 @@ class PerfComparator {
     }
 
     final checks = <PerfCheck>[
-      _ratioCheck(
-        'build.p90',
-        baseline.build.p90,
-        current.build.p90,
-        tolerance.maxP90BuildRegressionRatio,
-      ),
-      _ratioCheck(
-        'build.p99',
-        baseline.build.p99,
-        current.build.p99,
-        tolerance.maxP99BuildRegressionRatio,
-      ),
-      _ratioCheck(
-        'build.worst',
-        baseline.build.worst,
-        current.build.worst,
-        tolerance.maxWorstBuildRegressionRatio,
+      ..._frameTimeChecks(
+        'build',
+        baseline.build,
+        current.build,
+        (
+          p90: tolerance.maxP90BuildRegressionRatio,
+          p99: tolerance.maxP99BuildRegressionRatio,
+          worst: tolerance.maxWorstBuildRegressionRatio,
+        ),
       ),
       _jankCheck(
         'missedBuildBudgetCount',
@@ -68,23 +61,15 @@ class PerfComparator {
         current,
         (s) => s.missedBuildBudgetCount,
       ),
-      _ratioCheck(
-        'raster.p90',
-        baseline.raster.p90,
-        current.raster.p90,
-        tolerance.maxP90RasterRegressionRatio,
-      ),
-      _ratioCheck(
-        'raster.p99',
-        baseline.raster.p99,
-        current.raster.p99,
-        tolerance.maxP99RasterRegressionRatio,
-      ),
-      _ratioCheck(
-        'raster.worst',
-        baseline.raster.worst,
-        current.raster.worst,
-        tolerance.maxWorstRasterRegressionRatio,
+      ..._frameTimeChecks(
+        'raster',
+        baseline.raster,
+        current.raster,
+        (
+          p90: tolerance.maxP90RasterRegressionRatio,
+          p99: tolerance.maxP99RasterRegressionRatio,
+          worst: tolerance.maxWorstRasterRegressionRatio,
+        ),
       ),
       _jankCheck(
         'missedRasterBudgetCount',
@@ -99,6 +84,25 @@ class PerfComparator {
       warnings: _warnings(baseline, current),
     );
   }
+
+  /// The p90, p99 and worst checks for one [thread] (`build` or `raster`),
+  /// each allowed to regress by its own ratio.
+  List<PerfCheck> _frameTimeChecks(
+    String thread,
+    FrameStats baseline,
+    FrameStats current,
+    ({double p90, double p99, double worst}) ratios,
+  ) =>
+      [
+        _ratioCheck('$thread.p90', baseline.p90, current.p90, ratios.p90),
+        _ratioCheck('$thread.p99', baseline.p99, current.p99, ratios.p99),
+        _ratioCheck(
+          '$thread.worst',
+          baseline.worst,
+          current.worst,
+          ratios.worst,
+        ),
+      ];
 
   /// Fatal validity problems: a capture with no frames in it. Kept separate
   /// from [_warnings] because these make the verdict meaningless rather than
