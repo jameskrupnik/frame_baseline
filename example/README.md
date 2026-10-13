@@ -60,7 +60,7 @@ Recorded on an Apple Silicon Mac in profile mode:
 
 ```
 PERF SUMMARY (2 screens)
-  smooth_list_scroll  good  ok           build.p90=2.8ms   raster.p90=1.2ms  jank=0.0%
+  smooth_list_scroll  good  ok           build.p90=2.8ms  raster.p90=1.2ms  jank=0.0%
   janky_list_scroll   poor  ok           build.p90=22.9ms  raster.p90=0.8ms  jank=12.6%
 ```
 
