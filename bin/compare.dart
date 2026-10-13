@@ -46,14 +46,15 @@ const _valuedOptions = {
 ///
 /// ```sh
 /// dart run frame_baseline:compare <log> \
-///     [--baseline-dir=DIR] [--update] [--report=FILE.html] \
+///     [--baseline-dir=DIR] [--update] [--allow-missing] [--report=FILE.html] \
 ///     [--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] \
 ///     [--fail-on-grade=poor]
 /// ```
 ///
 /// Exit code is non-zero if any scenario regressed, a baseline is missing or
-/// unreadable, or the arguments are malformed, so it works directly as a CI
-/// gate. `--report` writes a color-coded HTML overview of every screen (works
+/// unreadable, a baselined scenario is absent from the log (unless
+/// `--allow-missing`), a scenario is refused, or the arguments are malformed,
+/// so it works directly as a CI gate. The README lists every cause. `--report` writes a color-coded HTML overview of every screen (works
 /// in `--update` mode too, for an at-a-glance view even before baselines
 /// exist).
 ///

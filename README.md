@@ -295,6 +295,7 @@ dart run frame_baseline:compare <device-log> [options]
 | `<device-log>`         | Path to the captured device/CI log containing `PERF_SUMMARY_JSON::` lines. |
 | `--baseline-dir=DIR`   | Directory of committed baselines (default: `perf/baselines`).             |
 | `--update`             | Write/refresh baselines from the log instead of comparing.               |
+| `--allow-missing`      | Compare only the scenarios in the log; don't fail for baselines it lacks. |
 | `--report=FILE.html`   | Also write a color-coded HTML overview of all screens.                   |
 | `--history=FILE.jsonl` | Append this run to a history log and report cumulative drift.            |
 | `--label=SHA`          | Tag the history entry, so a drift can be traced to a commit.             |
@@ -307,8 +308,30 @@ value written after a space (`--fail-on-grade poor`) or more than one log file
 is a usage error rather than being ignored, since an ignored flag would quietly
 switch a gate off.
 
-Exit codes: `0` all screens pass · `1` a regression, a missing or unreadable
-baseline, or no summaries found · `64` usage error · `66` log file not found.
+Without `--allow-missing`, every `<scenario>.perf.json` in `--baseline-dir`
+must have a summary in the log: a scenario that stopped running, or whose line
+was corrupt, fails the run rather than passing because it was never compared.
+Pass `--allow-missing` when a run deliberately captures only some scenarios.
+
+Exit codes:
+
+- `0` — every scenario passed.
+- `1` — any of:
+  - a scenario regressed past tolerance against its baseline;
+  - a baselined scenario has no summary in the log (unless `--allow-missing`);
+  - a marked log line could not be parsed (outside `--update`);
+  - a scenario has no baseline file, or its baseline is unreadable (corrupt,
+    or an unknown `schemaVersion`);
+  - a capture recorded 0 frames;
+  - `--fail-on-drift` is set and a scenario drifted;
+  - `--fail-on-grade=G` is set and a scenario graded `G` or worse;
+  - a scenario was refused: an unsafe name (empty, a path separator or `..`),
+    a name that differs from another only by case, or samples captured at
+    different frame budgets;
+  - the log has no `PERF_SUMMARY_JSON::` lines at all.
+- `64` — usage error: an unknown or malformed option, no log file, or
+  `--fail-on-drift` without `--history`.
+- `66` — the log file does not exist.
 
 ## Public API
 
