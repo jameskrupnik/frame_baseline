@@ -2,6 +2,16 @@
 
 ## 0.4.0
 
+First release published to pub.dev. Versions 0.1.0 to 0.3.0 were never
+published; their entries below are the development history, and changes
+between them affected nobody's installed copy.
+
+- **A baselined scenario missing from the log fails the run.** Only scenarios
+  present in the log used to be compared, so one that stopped running, or
+  whose line was corrupt, passed silently. Outside `--update`, every
+  `<scenario>.perf.json` without a current summary, and any marked line that
+  does not parse, now exits `1`. `--allow-missing` opts out of the first check.
+- A refused scenario name is no longer recorded in the history.
 - Baselines and history lines carry `"schemaVersion": 1`. Readers treat a
   missing field as version 1 and throw a `FormatException` for a version they
   do not know, so a future format change cannot be misread silently.
@@ -24,7 +34,7 @@
 - A scenario name containing a path separator or `..` is refused (exit `1`)
   instead of being used as a file name, which under `--update` could write
   outside `--baseline-dir`.
-- **Breaking:** `renderHtmlReport` takes `DateTime? generatedAt` instead of
+- `renderHtmlReport` takes `DateTime? generatedAt` instead of
   `String? generatedAtIso`.
 - `PerfSummary.fromJson`, `FrameStats.fromJson` and `PerfHistoryEntry.fromJson`
   throw a `FormatException` naming the bad field, instead of a `TypeError`, on
@@ -133,7 +143,7 @@ Added — `example/`:
 
 ## 0.1.0
 
-Initial release.
+Initial version (unpublished).
 
 Measurement & model:
 
