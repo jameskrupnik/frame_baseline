@@ -79,8 +79,12 @@ class InsufficientFrameDataException implements Exception {
 ///
 /// [settleDuration], when non-zero, waits after [action] completes before
 /// detaching the callback, giving the engine time to deliver its final batch of
-/// timings. Only use it where real time advances (an `integration_test`); under
-/// the widget-test binding a delay stalls until the fake clock is pumped.
+/// timings. In an `integration_test`, pass about 500ms: outside release mode
+/// the engine reports in ~100ms batches, and with no wait the last batch is
+/// lost. It defaults to zero because under the widget-test binding a delay
+/// stalls until the fake clock is pumped, so a non-zero default would turn
+/// the [InsufficientFrameDataException] that explains that setup mistake
+/// into a hung test.
 ///
 /// [frameBudgetMillis] defaults to one refresh interval of the display the app
 /// is drawing on (8.33ms at 120Hz), falling back to
