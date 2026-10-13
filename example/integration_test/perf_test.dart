@@ -2,11 +2,15 @@
 //
 // This is the on-device half of frame_baseline: it drives each screen inside
 // `measureScreenPerformance`, then emits a PERF_SUMMARY_JSON:: line per
-// scenario. The host half reads those lines back out of the run log:
+// scenario. The host half reads those lines back out of the run log.
+// tool/perf.sh does both; by hand, from example/:
 //
-//   flutter test integration_test/perf_test.dart --profile -d <device> \
-//       | tee /tmp/perf.log
-//   dart run frame_baseline:compare /tmp/perf.log --baseline-dir=perf/baselines
+//   flutter drive --driver=test_driver/integration_test.dart \
+//       --target=integration_test/perf_test.dart --profile -d <device> \
+//       | tee perf_run.log
+//   dart run frame_baseline:compare perf_run.log --baseline-dir=perf/baselines
+//
+// `flutter drive`, not `flutter test`: `flutter test` has no --profile.
 //
 // Must run in PROFILE mode on real hardware. In debug mode the numbers are
 // dominated by asserts and JIT; under the plain widget-test binding the engine
