@@ -139,12 +139,15 @@ Exit code is non-zero on regression, so it drops straight into CI. Example
 output:
 
 ```
-[FAIL] home_scroll
-  ok   build.p90                baseline=7.10 current=7.40 limit=8.16
-  FAIL build.worst             baseline=18.90 current=48.00 limit=24.57
-  FAIL missedBuildBudgetCount  baseline=1.00 current=14.00 limit=3.00
-  ok   raster.p90               baseline=6.20 current=6.50 limit=7.13
-  ok   missedRasterBudgetCount  baseline=0.00 current=1.00 limit=2.00
+[FAIL] chat_list
+  FAIL build.p90                baseline=7.10 current=40.00 limit=8.16
+  FAIL build.p99                baseline=9.23 current=52.00 limit=11.08
+  FAIL build.worst              baseline=11.36 current=64.00 limit=14.77
+  FAIL missedBuildBudgetCount   baseline=1.00 current=24.00 limit=3.40
+  FAIL raster.p90               baseline=6.20 current=8.00 limit=7.20
+  FAIL raster.p99               baseline=8.06 current=10.40 limit=9.67
+  ok   raster.worst             baseline=9.92 current=12.80 limit=12.90
+  ok   missedRasterBudgetCount  baseline=0.00 current=2.00 limit=2.40
 ```
 
 Both the UI thread (`build.*`) and the GPU thread (`raster.*`) are gated, so a
@@ -180,9 +183,9 @@ can see at a glance which ones are healthy:
 
 ```
 PERF SUMMARY (3 screens)
-  home_scroll  good  near-limit   build.p90=4.5ms  raster.p90=5.0ms  jank=0.0%
-  chat_list    poor  REGRESSED    build.p90=40.0ms raster.p90=8.0ms  jank=20.0%
-  settings     poor  ok           build.p90=15.1ms raster.p90=9.0ms  jank=2.0%
+  home_scroll  good  ok           build.p90=4.5ms  raster.p90=5.0ms  jank=0.0%
+  chat_list    poor  REGRESSED    build.p90=40.0ms  raster.p90=8.0ms  jank=20.0%
+  settings     ok    ok           build.p90=10.6ms  raster.p90=8.9ms  jank=2.0%
 ```
 
 `--fail-on-grade=poor` turns the grade into a gate. Unlike the baseline
@@ -232,13 +235,16 @@ dart run frame_baseline:compare perf_run.log \
 ```
 
 ```
-PERF SUMMARY (2 screens)
-  home_scroll  ok  ok  build.p90=7.9ms  raster.p90=1.2ms  jank=0.0%  drift=+98%
+PERF SUMMARY (1 screen)
+  home_scroll  good  ok           build.p90=7.9ms  raster.p90=1.2ms  jank=0.0%  drift=+76%
 
 DRIFT since history began
-  home_scroll is +98% vs the median of its first 3 runs (7 recorded).
-  Individually-passing changes have accumulated.
+  home_scroll is +76% vs the median of its first 3 of 6 recorded runs.
+  Cumulative since tracking began; may be one regression or many individually-passing changes adding up.
 ```
+
+The drift is +76% rather than the +98% end to end because the anchor is the
+median of the first three runs (4.5ms), not the very first.
 
 Commit `perf/history.jsonl` alongside the baselines. Appends never rewrite
 earlier lines, so the diff is always the new tail.
