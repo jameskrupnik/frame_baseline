@@ -1,6 +1,6 @@
 // dart format off
 import 'dart:convert' show JsonEncoder;
-import 'dart:io' show File, FileMode, Platform, exit, stderr, stdout;
+import 'dart:io' show Directory, File, FileMode, Platform, exit, stderr, stdout;
 
 // Import the pure-Dart sources directly rather than the barrel: the barrel
 // re-exports measure_screen_performance.dart, which pulls in Flutter/dart:ui and
@@ -23,12 +23,13 @@ const _defaultBaselineDir = 'perf/baselines';
 const _encoder = JsonEncoder.withIndent('  ');
 
 const _usage = 'Usage: dart run frame_baseline:compare '
-    '<device-log-file> [--baseline-dir=DIR] [--update] [--report=FILE.html] '
+    '<device-log-file> [--baseline-dir=DIR] [--update] [--allow-missing] '
+    '[--report=FILE.html] '
     '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
     '[--fail-on-grade=good|ok|poor]';
 
 /// Options that are switched on by their presence alone.
-const _flags = {'--update', '--fail-on-drift'};
+const _flags = {'--update', '--fail-on-drift', '--allow-missing'};
 
 /// Options that take a value, written as `--name=value`.
 const _valuedOptions = {
@@ -64,6 +65,7 @@ void main(List<String> args) {
 
   final update = args.contains('--update');
   final failOnDrift = args.contains('--fail-on-drift');
+  final allowMissing = args.contains('--allow-missing');
   final baselineDir =
       _optionValue(args, '--baseline-dir') ?? _defaultBaselineDir;
   final reportPath = _optionValue(args, '--report');
@@ -117,7 +119,12 @@ void main(List<String> args) {
   for (final s in summaries) {
     grouped.putIfAbsent(s.scenario, () => []).add(s);
   }
-  var failed = false;
+  // Outside --update, a marked line that did not parse is a scenario whose
+  // result is unknown, so it cannot count as a pass.
+  var failed = !update && extraction.errors.isNotEmpty;
+  if (!update && !allowMissing) {
+    failed = _reportMissingScenarios(baselineDir, grouped.keys) || failed;
+  }
   final clashing = _caseClashes(grouped.keys);
   final medians = <PerfSummary>[];
   for (final entry in grouped.entries) {
@@ -348,6 +355,35 @@ String? _validateArgs(List<String> args) {
     return 'Unknown option "$arg".';
   }
   return null;
+}
+
+/// Reports every baseline in [baselineDir] whose scenario is not among
+/// [present], and returns whether there was any.
+///
+/// A scenario that silently stopped running — a deleted test, a renamed
+/// scenario, a crash before it reported — would otherwise pass the gate
+/// forever, because only scenarios in the log were compared.
+bool _reportMissingScenarios(String baselineDir, Iterable<String> present) {
+  final dir = Directory(baselineDir);
+  if (!dir.existsSync()) return false;
+  // Case-folded, as a case-insensitive file system resolves the baseline.
+  final seen = {for (final name in present) name.toLowerCase()};
+  const suffix = '.perf.json';
+  final missing = [
+    for (final file in dir.listSync().whereType<File>())
+      if (file.uri.pathSegments.last.endsWith(suffix))
+        file.uri.pathSegments.last
+            .substring(0, file.uri.pathSegments.last.length - suffix.length),
+  ].where((name) => !seen.contains(name.toLowerCase())).toList()
+    ..sort();
+  for (final name in missing) {
+    stderr.writeln(
+      'Missing scenario "$name": $baselineDir/$name$suffix has no summary in '
+      'this log. Delete the baseline if the scenario is gone, or pass '
+      '--allow-missing to compare only what ran.',
+    );
+  }
+  return missing.isNotEmpty;
 }
 
 /// Whether [scenario] is safe to use as a baseline file name.

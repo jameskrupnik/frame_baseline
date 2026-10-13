@@ -590,4 +590,47 @@ void main() {
     expect(result.stderr, contains('Unreadable baseline'));
     expect(result.stderr, contains('demo.perf.json'));
   });
+
+  group('missing scenarios', () {
+    final demo = _logLine(_summary(const [4, 5, 6, 7, 8]));
+    final other = _logLine(_summary(const [4, 5, 6, 7, 8], scenario: 'other'));
+
+    test('fails when a baselined scenario has no line in the log', () {
+      run([demo, other], args: ['--update']);
+
+      final result = run([demo]);
+
+      expect(result.exitCode, 1, reason: 'a vanished scenario must not pass');
+      expect(result.stderr, contains('Missing scenario "other"'));
+    });
+
+    test('fails when a baselined scenario only has a corrupt line', () {
+      run([demo, other], args: ['--update']);
+
+      final result = run([
+        demo,
+        'flutter: $kPerfSummaryMarker{"scenario": "other", "sampled',
+      ]);
+
+      expect(result.exitCode, 1);
+      expect(result.stderr, contains('unparsable perf line'));
+    });
+
+    test('fails on a corrupt line even when every baseline is present', () {
+      run([demo], args: ['--update']);
+
+      final result = run([demo, 'flutter: $kPerfSummaryMarker{oops']);
+
+      expect(result.exitCode, 1);
+    });
+
+    test('--allow-missing compares only the scenarios that ran', () {
+      run([demo, other], args: ['--update']);
+
+      final result = run([demo], args: ['--allow-missing']);
+
+      expect(result.exitCode, 0);
+      expect(result.stderr, isNot(contains('Missing scenario')));
+    });
+  });
 }
