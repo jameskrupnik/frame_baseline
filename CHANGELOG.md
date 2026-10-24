@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Captures record their build mode, and `--update` refuses debug ones.**
+  `PerfSummary.buildMode` is `debug`, `profile` or `release`, set by
+  `measureScreenPerformance` and written to the summary JSON (left out when
+  unknown, so older summaries and baselines still read). Debug frame times are
+  dominated by asserts and JIT, but nothing stopped a debug capture — the
+  default for Patrol and other simulator runs — from becoming a committed
+  baseline. `--update` now exits `1` for one unless `--allow-debug-baseline` is
+  passed, and comparing a debug capture, or one measured in a different mode
+  from its baseline, prints a `!` warning.
+
 ## 0.4.0
 
 First release published to pub.dev. Versions 0.1.0 to 0.3.0 were never

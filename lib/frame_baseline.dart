@@ -33,7 +33,7 @@ export 'src/perf_reporter.dart'
         extractPerfSummaries,
         kPerfSummaryMarker,
         reportPerfSummary;
-export 'src/perf_summary.dart' show PerfSummary;
+export 'src/perf_summary.dart' show PerfSummary, kBuildModes;
 export 'src/perf_tolerance.dart' show PerfTolerance;
 export 'src/perf_trend.dart'
     show PerfDrift, analyzeDrift, kDefaultReferenceWindow;

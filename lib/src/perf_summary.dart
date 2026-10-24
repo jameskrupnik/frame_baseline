@@ -35,6 +35,7 @@ class PerfSummary {
     required this.raster,
     required this.missedBuildBudgetCount,
     required this.missedRasterBudgetCount,
+    this.buildMode,
   });
 
   /// Builds a summary from raw per-frame build/raster durations (ms).
@@ -43,8 +44,10 @@ class PerfSummary {
     required List<double> buildMillis,
     required List<double> rasterMillis,
     required double frameBudgetMillis,
+    String? buildMode,
   }) {
     return PerfSummary(
+      buildMode: buildMode,
       scenario: scenario,
       sampledFrameCount: buildMillis.length,
       frameBudgetMillis: frameBudgetMillis,
@@ -96,6 +99,9 @@ class PerfSummary {
         }.join('ms, ')}ms)',
       );
     }
+    // Mixed build modes have no single mode, so the median records none.
+    final modes = {for (final s in samples) s.buildMode};
+    final buildMode = modes.length == 1 ? modes.first : null;
     final captured = samples.where((s) => s.sampledFrameCount > 0).toList();
     final used = captured.isEmpty ? samples : captured;
     if (used.length == 1) return used.first;
@@ -104,6 +110,7 @@ class PerfSummary {
         _median(used.map(field).toList());
 
     return PerfSummary(
+      buildMode: buildMode,
       scenario: scenario,
       sampledFrameCount: med((s) => s.sampledFrameCount.toDouble()).round(),
       frameBudgetMillis: med((s) => s.frameBudgetMillis),
@@ -144,6 +151,7 @@ class PerfSummary {
       raster: FrameStats.fromJson(
         readField<Map<String, dynamic>>(json, 'raster'),
       ),
+      buildMode: _readBuildMode(json),
       missedBuildBudgetCount: readField<int>(json, 'missedBuildBudgetCount'),
       missedRasterBudgetCount: readField<int>(json, 'missedRasterBudgetCount'),
     );
@@ -170,6 +178,13 @@ class PerfSummary {
   /// Frames whose raster time exceeded [frameBudgetMillis].
   final int missedRasterBudgetCount;
 
+  /// The Flutter build mode the frames were measured in: `debug`, `profile`
+  /// or `release`. Null for summaries written before it was recorded.
+  ///
+  /// Debug frame times are dominated by asserts and JIT, so the compare CLI
+  /// refuses to record a debug capture as a baseline.
+  final String? buildMode;
+
   /// Fraction of sampled frames that missed the budget on the UI thread.
   double get jankyBuildFrameRatio =>
       sampledFrameCount == 0 ? 0 : missedBuildBudgetCount / sampledFrameCount;
@@ -189,5 +204,19 @@ class PerfSummary {
         'raster': raster.toJson(),
         'missedBuildBudgetCount': missedBuildBudgetCount,
         'missedRasterBudgetCount': missedRasterBudgetCount,
+        if (buildMode != null) 'buildMode': buildMode,
       };
+}
+
+/// Build modes a summary can record, as `kDebugMode`, `kProfileMode` and
+/// release name them.
+const kBuildModes = {'debug', 'profile', 'release'};
+
+String? _readBuildMode(Map<String, dynamic> json) {
+  if (!json.containsKey('buildMode')) return null;
+  final mode = json['buildMode'];
+  if (mode is String && kBuildModes.contains(mode)) return mode;
+  throw FormatException(
+    'expected "buildMode" to be one of ${kBuildModes.join(', ')}, got $mode',
+  );
 }

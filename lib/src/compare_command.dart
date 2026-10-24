@@ -24,13 +24,19 @@ part 'compare_run.dart';
 // dart format on
 
 const _usage = 'Usage: dart run frame_baseline:compare '
-    '<device-log-file> [--baseline-dir=DIR] [--update] [--allow-missing] '
+    '<device-log-file> [--baseline-dir=DIR] [--update] '
+    '[--allow-debug-baseline] [--allow-missing] '
     '[--report=FILE.html] '
     '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
     '[--fail-on-grade=good|ok|poor]';
 
 /// Options that are switched on by their presence alone.
-const _flags = {'--update', '--fail-on-drift', '--allow-missing'};
+const _flags = {
+  '--update',
+  '--fail-on-drift',
+  '--allow-missing',
+  '--allow-debug-baseline',
+};
 
 /// Options that take a value, written as `--name=value`.
 const _valuedOptions = {

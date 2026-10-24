@@ -144,8 +144,16 @@ Future<PerfSummary> measureScreenPerformance({
     buildMillis: [for (final t in timings) toMillis(t.buildDuration)],
     rasterMillis: [for (final t in timings) toMillis(t.rasterDuration)],
     frameBudgetMillis: budget,
+    buildMode: _buildMode,
   );
 }
+
+/// The build mode this code was compiled in.
+String get _buildMode => kProfileMode
+    ? 'profile'
+    : kDebugMode
+        ? 'debug'
+        : 'release';
 
 /// Validates a caller's [frameBudgetMillis], or reads the display's budget
 /// when it is null.

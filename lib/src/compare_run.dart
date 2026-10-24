@@ -152,6 +152,16 @@ class _CompareRun {
     final baselineFile =
         File('${options.baselineDir}/${current.scenario}.perf.json');
     if (options.update) {
+      if (current.buildMode == 'debug' && !options.allowDebugBaseline) {
+        err.writeln(
+          'Refusing to record "${current.scenario}": it was measured in debug '
+          'mode, where asserts and JIT dominate frame times. Capture in '
+          'profile mode on the pinned device, or pass --allow-debug-baseline '
+          'to record it anyway.',
+        );
+        _failed = true;
+        return ScenarioReport(summary: current, drift: drift);
+      }
       baselineFile.parent.createSync(recursive: true);
       baselineFile.writeAsStringSync('${_encoder.convert(current.toJson())}\n');
       out.writeln('Updated baseline: ${baselineFile.path}');
@@ -165,6 +175,7 @@ class _CompareRun {
     final result =
         const PerfComparator().compare(baseline: baseline, current: current);
     _printComparison(result);
+    _warnOnBuildModes(baseline: baseline, current: current);
     if (!result.passed) _failed = true;
     return ScenarioReport(summary: current, comparison: result, drift: drift);
   }
@@ -185,6 +196,25 @@ class _CompareRun {
     } on FormatException catch (e) {
       err.writeln('Unreadable baseline ${file.path}: ${e.message}');
       return null;
+    }
+  }
+
+  /// Flags a comparison whose numbers are not meaningful because of the build
+  /// mode they were measured in. Advisory: the verdict is left as it is.
+  void _warnOnBuildModes({
+    required PerfSummary baseline,
+    required PerfSummary current,
+  }) {
+    if (current.buildMode == 'debug') {
+      out.writeln(
+        '  !    measured in debug mode; frame times are not representative',
+      );
+    }
+    final (was, now) = (baseline.buildMode, current.buildMode);
+    if (was != null && now != null && was != now) {
+      out.writeln(
+        '  !    baseline was measured in $was mode, this run in $now',
+      );
     }
   }
 

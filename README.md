@@ -295,6 +295,7 @@ dart run frame_baseline:compare <device-log> [options]
 | `<device-log>`         | Path to the captured device/CI log containing `PERF_SUMMARY_JSON::` lines. |
 | `--baseline-dir=DIR`   | Directory of committed baselines (default: `perf/baselines`).             |
 | `--update`             | Write/refresh baselines from the log instead of comparing.               |
+| `--allow-debug-baseline` | Let `--update` record a capture measured in debug mode.                |
 | `--allow-missing`      | Compare only the scenarios in the log; don't fail for baselines it lacks. |
 | `--report=FILE.html`   | Also write a color-coded HTML overview of all screens.                   |
 | `--history=FILE.jsonl` | Append this run to a history log and report cumulative drift.            |
@@ -323,6 +324,8 @@ Exit codes:
   - a scenario has no baseline file, or its baseline is unreadable (corrupt,
     or an unknown `schemaVersion`);
   - a capture recorded 0 frames;
+  - `--update` was given a capture measured in debug mode (unless
+    `--allow-debug-baseline`);
   - `--fail-on-drift` is set and a scenario drifted;
   - `--fail-on-grade=G` is set and a scenario graded `G` or worse;
   - a scenario was refused: an unsafe name (empty, a path separator or `..`),

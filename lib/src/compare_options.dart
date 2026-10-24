@@ -8,6 +8,7 @@ class _CompareOptions {
     required this.update,
     required this.allowMissing,
     required this.failOnDrift,
+    required this.allowDebugBaseline,
     this.reportPath,
     this.historyPath,
     this.label,
@@ -23,6 +24,7 @@ class _CompareOptions {
       update: args.contains('--update'),
       allowMissing: args.contains('--allow-missing'),
       failOnDrift: args.contains('--fail-on-drift'),
+      allowDebugBaseline: args.contains('--allow-debug-baseline'),
       reportPath: _optionValue(args, '--report'),
       historyPath: _optionValue(args, '--history'),
       label: _optionValue(args, '--label'),
@@ -40,6 +42,9 @@ class _CompareOptions {
   /// baseline the log has no summary for.
   final bool allowMissing;
   final bool failOnDrift;
+
+  /// Let --update record a capture measured in debug mode.
+  final bool allowDebugBaseline;
   final String? reportPath;
   final String? historyPath;
 
