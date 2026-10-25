@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **ADOPTION.md pitfalls cover cold first samples and lists that cannot
+  scroll**, two things that showed up in the first real multi-flow suite.
+
 - **`measureScreenPerformanceSamples` captures a scenario several times.** It
   runs `measureScreenPerformance` `samples` times (default
   `kDefaultSampleCount`, 3), reports each sample and calls `reset` between

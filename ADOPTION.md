@@ -420,3 +420,12 @@ counts.
 - **Sharing a runner.** Concurrent jobs on the measuring machine corrupt timings.
 - **Re-baselining reflexively.** The failure mode that makes the whole suite
   decorative.
+- **A cold first sample.** The first capture of a screen pays for shader
+  compilation, image decoding and first-time layout. In a real suite, a chat
+  list's worst frame was 96.9ms in sample one and 3.8ms and 5.1ms in samples two
+  and three. The median of three absorbs one cold sample; to keep it out of the
+  numbers altogether, drive the screen once before measuring.
+- **A list that cannot scroll.** A fling on content shorter than the viewport
+  draws no frames, so the capture throws `InsufficientFrameDataException`.
+  That is the gate working, not a flaky test: give the scenario enough fixture
+  data to scroll.
