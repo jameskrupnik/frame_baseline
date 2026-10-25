@@ -10,6 +10,7 @@ class _CompareOptions {
     required this.failOnDrift,
     required this.allowDebugBaseline,
     this.reportPath,
+    this.tolerancePath,
     this.historyPath,
     this.label,
     this.gradeLimit,
@@ -26,6 +27,7 @@ class _CompareOptions {
       failOnDrift: args.contains('--fail-on-drift'),
       allowDebugBaseline: args.contains('--allow-debug-baseline'),
       reportPath: _optionValue(args, '--report'),
+      tolerancePath: _optionValue(args, '--tolerance'),
       historyPath: _optionValue(args, '--history'),
       label: _optionValue(args, '--label'),
       gradeLimit: grade == null ? null : PerfGrade.tryParse(grade),
@@ -46,6 +48,9 @@ class _CompareOptions {
   /// Let --update record a capture measured in debug mode.
   final bool allowDebugBaseline;
   final String? reportPath;
+
+  /// JSON file of tolerance bands; null uses the defaults.
+  final String? tolerancePath;
   final String? historyPath;
 
   /// Tag for this run's history entries, typically the commit SHA.

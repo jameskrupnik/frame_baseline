@@ -6,9 +6,17 @@ const _encoder = JsonEncoder.withIndent('  ');
 /// samples, gates each scenario, records history and writes the reports,
 /// remembering whether anything failed.
 class _CompareRun {
-  _CompareRun(this.options, {required this.out, required this.err});
+  _CompareRun(
+    this.options, {
+    required this.tolerance,
+    required this.out,
+    required this.err,
+  });
 
   final _CompareOptions options;
+
+  /// The per-change gate's bands.
+  final PerfTolerance tolerance;
   final IOSink out;
   final IOSink err;
   var _failed = false;
@@ -172,8 +180,8 @@ class _CompareRun {
       _failed = true;
       return ScenarioReport(summary: current, drift: drift);
     }
-    final result =
-        const PerfComparator().compare(baseline: baseline, current: current);
+    final result = PerfComparator(tolerance: tolerance)
+        .compare(baseline: baseline, current: current);
     _printComparison(result);
     _warnOnBuildModes(baseline: baseline, current: current);
     if (!result.passed) _failed = true;

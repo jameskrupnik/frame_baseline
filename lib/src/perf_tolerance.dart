@@ -22,6 +22,72 @@ class PerfTolerance {
     this.absoluteSlackMillis = 1.0,
   });
 
+  /// Reads a tolerance from [json], such as a `--tolerance` file. Keys are the
+  /// field names below; any key it leaves out keeps its default.
+  ///
+  /// Throws a [FormatException] for an unknown key or a value that is not a
+  /// non-negative number (a whole number for `jankyFrameSlack`), so a typo
+  /// cannot silently leave a band at its default.
+  factory PerfTolerance.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'maxP90BuildRegressionRatio',
+      'maxP99BuildRegressionRatio',
+      'maxWorstBuildRegressionRatio',
+      'maxP90RasterRegressionRatio',
+      'maxP99RasterRegressionRatio',
+      'maxWorstRasterRegressionRatio',
+      'maxAdditionalJankyFrameRatio',
+      'jankyFrameSlack',
+      'absoluteSlackMillis',
+    };
+    final unknown = json.keys.where((k) => !known.contains(k)).toList();
+    if (unknown.isNotEmpty) {
+      throw FormatException(
+        'unknown tolerance key ${unknown.map((k) => '"$k"').join(', ')} '
+        '(expected any of: ${known.join(', ')})',
+      );
+    }
+    const d = PerfTolerance();
+    double ratio(String key, double fallback) {
+      final value = json[key];
+      if (value == null) return fallback;
+      if (value is num && value.isFinite && value >= 0) return value.toDouble();
+      throw FormatException(
+        'expected "$key" to be a non-negative number, got $value',
+      );
+    }
+
+    final slack = json['jankyFrameSlack'];
+    if (slack != null && (slack is! int || slack < 0)) {
+      throw FormatException(
+        'expected "jankyFrameSlack" to be a non-negative whole number, '
+        'got $slack',
+      );
+    }
+    return PerfTolerance(
+      maxP90BuildRegressionRatio:
+          ratio('maxP90BuildRegressionRatio', d.maxP90BuildRegressionRatio),
+      maxP99BuildRegressionRatio:
+          ratio('maxP99BuildRegressionRatio', d.maxP99BuildRegressionRatio),
+      maxWorstBuildRegressionRatio:
+          ratio('maxWorstBuildRegressionRatio', d.maxWorstBuildRegressionRatio),
+      maxP90RasterRegressionRatio:
+          ratio('maxP90RasterRegressionRatio', d.maxP90RasterRegressionRatio),
+      maxP99RasterRegressionRatio:
+          ratio('maxP99RasterRegressionRatio', d.maxP99RasterRegressionRatio),
+      maxWorstRasterRegressionRatio: ratio(
+        'maxWorstRasterRegressionRatio',
+        d.maxWorstRasterRegressionRatio,
+      ),
+      maxAdditionalJankyFrameRatio: ratio(
+        'maxAdditionalJankyFrameRatio',
+        d.maxAdditionalJankyFrameRatio,
+      ),
+      jankyFrameSlack: (slack as int?) ?? d.jankyFrameSlack,
+      absoluteSlackMillis: ratio('absoluteSlackMillis', d.absoluteSlackMillis),
+    );
+  }
+
   /// Tolerance for *cumulative* drift since a scenario's history began, as used
   /// by `analyzeDrift`.
   ///

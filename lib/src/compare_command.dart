@@ -17,6 +17,7 @@ import 'package:frame_baseline/src/perf_reporter.dart'
     show PerfLogExtraction, extractPerfSummaries, kPerfSummaryMarker;
 import 'package:frame_baseline/src/perf_summary.dart'
     show PerfSummary, sameFrameBudget;
+import 'package:frame_baseline/src/perf_tolerance.dart' show PerfTolerance;
 import 'package:frame_baseline/src/perf_trend.dart' show analyzeDrift;
 
 part 'compare_options.dart';
@@ -26,7 +27,7 @@ part 'compare_run.dart';
 const _usage = 'Usage: dart run frame_baseline:compare '
     '<device-log-file> [--baseline-dir=DIR] [--update] '
     '[--allow-debug-baseline] [--allow-missing] '
-    '[--report=FILE.html] '
+    '[--tolerance=FILE.json] [--report=FILE.html] '
     '[--history=FILE.jsonl] [--label=SHA] [--fail-on-drift] '
     '[--fail-on-grade=good|ok|poor]';
 
@@ -41,6 +42,7 @@ const _flags = {
 /// Options that take a value, written as `--name=value`.
 const _valuedOptions = {
   '--baseline-dir',
+  '--tolerance',
   '--report',
   '--history',
   '--label',
@@ -74,6 +76,13 @@ int runCompare(List<String> args, {IOSink? out, IOSink? err}) {
   }
 
   final options = _CompareOptions.fromArgs(args);
+  final PerfTolerance tolerance;
+  try {
+    tolerance = _readTolerance(options.tolerancePath);
+  } on FormatException catch (error) {
+    e.writeln(error.message);
+    return 64;
+  }
   final logFile = File(options.logPath);
   if (!logFile.existsSync()) {
     e.writeln('Log file not found: ${options.logPath}');
@@ -89,7 +98,26 @@ int runCompare(List<String> args, {IOSink? out, IOSink? err}) {
     );
     return 1;
   }
-  return _CompareRun(options, out: o, err: e).execute(extraction) ? 0 : 1;
+  return _CompareRun(options, tolerance: tolerance, out: o, err: e)
+          .execute(extraction)
+      ? 0
+      : 1;
+}
+
+/// Reads the `--tolerance` file at [path], or the default bands when there
+/// is none. Throws a [FormatException] naming the file when it is missing or
+/// invalid: a gate run with bands nobody asked for is worse than no run.
+PerfTolerance _readTolerance(String? path) {
+  if (path == null) return const PerfTolerance();
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw FormatException('Tolerance file not found: $path');
+  }
+  try {
+    return PerfTolerance.fromJson(decodeJsonObject(file.readAsStringSync()));
+  } on FormatException catch (error) {
+    throw FormatException('Invalid tolerance file $path: ${error.message}');
+  }
 }
 
 /// Returns a message describing why [args] cannot be run, or null.

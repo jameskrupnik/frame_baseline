@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **`compare --tolerance=FILE.json` sets the gate's bands.** The CLI always
+  used the default `PerfTolerance`, so the tuning ADOPTION.md recommends was
+  only possible from Dart. The file takes any `PerfTolerance` field (missing
+  ones keep their defaults); an unknown key, a negative band or a missing file
+  is a usage error (exit `64`). `PerfTolerance.fromJson` is the parser.
+  Measured on a simulator, two runs of identical code moved `raster.worst` from
+  9.9ms to 39ms, which fails the default +30% band.
+
 - **Captures record their build mode, and `--update` refuses debug ones.**
   `PerfSummary.buildMode` is `debug`, `profile` or `release`, set by
   `measureScreenPerformance` and written to the summary JSON (left out when

@@ -284,6 +284,9 @@ const PerfComparator(
 );
 ```
 
+From the CLI, put the bands in a JSON file keyed by the same field names and
+pass `--tolerance=FILE.json`. Fields it leaves out keep their defaults.
+
 ## CLI reference
 
 ```
@@ -297,6 +300,7 @@ dart run frame_baseline:compare <device-log> [options]
 | `--update`             | Write/refresh baselines from the log instead of comparing.               |
 | `--allow-debug-baseline` | Let `--update` record a capture measured in debug mode.                |
 | `--allow-missing`      | Compare only the scenarios in the log; don't fail for baselines it lacks. |
+| `--tolerance=FILE.json` | Tolerance bands for the gate; see [Tuning tolerances](#tuning-tolerances). |
 | `--report=FILE.html`   | Also write a color-coded HTML overview of all screens.                   |
 | `--history=FILE.jsonl` | Append this run to a history log and report cumulative drift.            |
 | `--label=SHA`          | Tag the history entry, so a drift can be traced to a commit.             |
@@ -317,6 +321,8 @@ Pass `--allow-missing` when a run deliberately captures only some scenarios.
 Exit codes:
 
 - `0` — every scenario passed.
+- `64` — a usage error, including a `--tolerance` file that is missing, is not
+  a JSON object, or has an unknown key or an invalid band.
 - `1` — any of:
   - a scenario regressed past tolerance against its baseline;
   - a baselined scenario has no summary in the log (unless `--allow-missing`);

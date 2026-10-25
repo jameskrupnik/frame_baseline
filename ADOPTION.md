@@ -370,6 +370,26 @@ Tighten from *observed* noise, not guesses:
 If run-to-run spread is wider than the regression you want to catch, the fix is
 **more samples**, not a tighter band. Raise `sampleCount` in the test.
 
+Write the bands to a JSON file and pass it to the gate, so CI uses the same
+numbers you tuned:
+
+```json
+{
+    "maxP90BuildRegressionRatio": 0.25,
+    "maxWorstBuildRegressionRatio": 2.0,
+    "maxWorstRasterRegressionRatio": 2.0
+}
+```
+
+```bash
+dart run frame_baseline:compare perf_run.log \
+    --baseline-dir=perf/baselines --tolerance=perf/tolerance.json
+```
+
+Keys are the `PerfTolerance` field names, and any you leave out keep their
+defaults. An unknown key is a usage error, so a typo cannot quietly leave a
+band at its default.
+
 Prefer gating on **counts over percentiles**. In measured back-to-back runs of
 identical code, p90 moved 27% while `missedBuildBudgetCount` was *identical*.
 Missed-frame counts are both the steadier signal and the one closest to what
