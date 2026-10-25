@@ -85,29 +85,27 @@ void main() {
     await tester.pumpAndSettle();
     // ...navigate to the screen under test...
 
-    // Three samples: a single capture is too noisy to gate on. The host
-    // collapses repeated lines for one scenario to their median.
-    for (var sample = 0; sample < 3; sample++) {
-      final summary = await measureScreenPerformance(
-        scenario: 'feed_scroll',
-        action: () async {
-          for (var i = 0; i < 5; i++) {
-            await tester.fling(
-              find.byType(Scrollable).first,
-              const Offset(0, -500),
-              4000,
-            );
-            await tester.pumpAndSettle();
-          }
-        },
-        settleDuration: const Duration(milliseconds: 500),
-      );
-      reportPerfSummary(summary);
-
-      // Reset, so every sample measures the same work.
-      await tester.fling(find.byType(Scrollable).first, const Offset(0, 20000), 20000);
-      await tester.pumpAndSettle();
-    }
+    // Three samples (the default): a single capture is too noisy to gate on.
+    // Each sample is reported; the host collapses them to their median.
+    await measureScreenPerformanceSamples(
+      scenario: 'feed_scroll',
+      action: () async {
+        for (var i = 0; i < 5; i++) {
+          await tester.fling(
+            find.byType(Scrollable).first,
+            const Offset(0, -500),
+            4000,
+          );
+          await tester.pumpAndSettle();
+        }
+      },
+      // Reset between samples, so every sample measures the same work.
+      reset: () async {
+        await tester.fling(find.byType(Scrollable).first, const Offset(0, 20000), 20000);
+        await tester.pumpAndSettle();
+      },
+      settleDuration: const Duration(milliseconds: 500),
+    );
   });
 }
 ```
@@ -368,7 +366,7 @@ Tighten from *observed* noise, not guesses:
 3. Set your band comfortably above that spread.
 
 If run-to-run spread is wider than the regression you want to catch, the fix is
-**more samples**, not a tighter band. Raise `sampleCount` in the test.
+**more samples**, not a tighter band. Raise `samples` in the test.
 
 Write the bands to a JSON file and pass it to the gate, so CI uses the same
 numbers you tuned:

@@ -100,17 +100,20 @@ testWidgets('home scroll performance', (tester) async {
   await tester.pumpWidget(const MyApp());
   // ...navigate to the screen under test...
 
-  for (var sample = 0; sample < 3; sample++) {
-    final summary = await measureScreenPerformance(
-      scenario: 'home_scroll',
-      action: () async {
-        await tester.fling(find.byType(Scrollable).first, const Offset(0, -400), 3000);
-        await tester.pumpAndSettle();
-      },
-      settleDuration: const Duration(milliseconds: 500),
-    );
-    reportPerfSummary(summary); // prints "PERF_SUMMARY_JSON:: {...}" to the log
-  }
+  // Captures three samples and prints a "PERF_SUMMARY_JSON:: {...}" line for
+  // each. For one capture, call measureScreenPerformance and reportPerfSummary.
+  await measureScreenPerformanceSamples(
+    scenario: 'home_scroll',
+    action: () async {
+      await tester.fling(find.byType(Scrollable).first, const Offset(0, -400), 3000);
+      await tester.pumpAndSettle();
+    },
+    reset: () async {
+      await tester.fling(find.byType(Scrollable).first, const Offset(0, 4000), 6000);
+      await tester.pumpAndSettle();
+    },
+    settleDuration: const Duration(milliseconds: 500),
+  );
 });
 ```
 

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`measureScreenPerformanceSamples` captures a scenario several times.** It
+  runs `measureScreenPerformance` `samples` times (default
+  `kDefaultSampleCount`, 3), reports each sample and calls `reset` between
+  them — the loop every suite wrote by hand around the single-capture API. An
+  empty capture still throws.
+
 - **`compare --tolerance=FILE.json` sets the gate's bands.** The CLI always
   used the default `PerfTolerance`, so the tuning ADOPTION.md recommends was
   only possible from Dart. The file takes any `PerfTolerance` field (missing

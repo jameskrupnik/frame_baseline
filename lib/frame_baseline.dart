@@ -12,7 +12,9 @@ export 'src/measure_screen_performance.dart'
         InsufficientFrameDataException,
         kDefaultFrameBudgetMillis,
         kDefaultMinSampledFrames,
-        measureScreenPerformance;
+        kDefaultSampleCount,
+        measureScreenPerformance,
+        measureScreenPerformanceSamples;
 export 'src/perf_comparator.dart'
     show PerfCheck, PerfComparator, PerfComparison;
 export 'src/perf_history.dart'

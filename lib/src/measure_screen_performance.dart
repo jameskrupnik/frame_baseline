@@ -4,6 +4,7 @@ import 'dart:ui' show FramePhase, FrameTiming;
 import 'package:flutter/foundation.dart'
     show debugPrint, kDebugMode, kProfileMode;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
+import 'package:frame_baseline/src/perf_reporter.dart' show reportPerfSummary;
 import 'package:frame_baseline/src/perf_summary.dart' show PerfSummary;
 // dart format on
 
@@ -154,6 +155,51 @@ String get _buildMode => kProfileMode
     : kDebugMode
         ? 'debug'
         : 'release';
+
+/// The number of samples [measureScreenPerformanceSamples] takes by default.
+///
+/// A single capture is too noisy to gate on; the compare CLI collapses the
+/// repeated lines for one scenario to their median.
+const int kDefaultSampleCount = 3;
+
+/// Captures [scenario] [samples] times with [measureScreenPerformance],
+/// reports each sample with [reportPerfSummary], and returns the summaries.
+///
+/// [reset] runs between samples, so every sample measures the same work —
+/// scroll a list back to the top, close a sheet. It does not run after the
+/// last sample.
+///
+/// Like [measureScreenPerformance], a sample that captures fewer than
+/// [minSampledFrames] frames throws an [InsufficientFrameDataException];
+/// the remaining samples are not taken. Throws an [ArgumentError] if
+/// [samples] is less than one.
+Future<List<PerfSummary>> measureScreenPerformanceSamples({
+  required String scenario,
+  required Future<void> Function() action,
+  Future<void> Function()? reset,
+  int samples = kDefaultSampleCount,
+  double? frameBudgetMillis,
+  int minSampledFrames = kDefaultMinSampledFrames,
+  Duration settleDuration = Duration.zero,
+}) async {
+  if (samples < 1) {
+    throw ArgumentError.value(samples, 'samples', 'must be at least 1');
+  }
+  final summaries = <PerfSummary>[];
+  for (var sample = 0; sample < samples; sample++) {
+    if (sample > 0 && reset != null) await reset();
+    final summary = await measureScreenPerformance(
+      scenario: scenario,
+      action: action,
+      frameBudgetMillis: frameBudgetMillis,
+      minSampledFrames: minSampledFrames,
+      settleDuration: settleDuration,
+    );
+    reportPerfSummary(summary);
+    summaries.add(summary);
+  }
+  return summaries;
+}
 
 /// Validates a caller's [frameBudgetMillis], or reads the display's budget
 /// when it is null.
