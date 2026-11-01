@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 - **ADOPTION.md pitfalls cover cold first samples and lists that cannot
   scroll**, two things that showed up in the first real multi-flow suite.

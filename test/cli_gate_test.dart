@@ -203,7 +203,10 @@ void main() {
   test('an unchanged run is not reported near its limit', () {
     final lines = [
       logLine(
-        cliSummary([for (var i = 0; i < 40; i++) i < 30 ? 20 : 4]),
+        cliSummary([
+          for (var i = 0; i < 40; i++)
+            if (i < 30) 20 else 4,
+        ]),
       ),
     ];
     run(lines, args: ['--update']);

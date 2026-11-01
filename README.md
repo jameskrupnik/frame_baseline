@@ -78,7 +78,7 @@ machine-parsable log line, so no VM-service timeline extraction is needed.
 
 ```yaml
 dev_dependencies:
-    frame_baseline: ^0.4.0
+    frame_baseline: ^0.5.0
     integration_test:
         sdk: flutter
 ```

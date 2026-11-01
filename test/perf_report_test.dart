@@ -97,7 +97,10 @@ void main() {
       // limit is its own count plus a 2-frame slack, so 30 missed frames sit
       // at 94% of a limit of 32 before anything has changed.
       final same = _summary(
-        buildMillis: [for (var i = 0; i < 40; i++) i < 30 ? 20 : 4],
+        buildMillis: [
+          for (var i = 0; i < 40; i++)
+            if (i < 30) 20 else 4,
+        ],
       );
       final c = comparator.compare(baseline: same, current: same);
       expect(regressionStatusFor(c), RegressionStatus.pass);

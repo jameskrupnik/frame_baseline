@@ -49,7 +49,7 @@ been quietly "passing" ever since.
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-    frame_baseline: ^0.4.0
+    frame_baseline: ^0.5.0
     integration_test:
         sdk: flutter
 ```
